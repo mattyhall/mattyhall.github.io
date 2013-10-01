@@ -5,6 +5,7 @@
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
         <title>Matthew Hall - Breaking ciphers in haskell</title>
         <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
     </head>
     <body>
         <div id="header">
@@ -80,7 +81,6 @@ updateKey []       []     key' <span class="fu">=</span> key'</code></pre>
 <p><code>breakCipher'</code> keeps recursing until there are no words left or there are no words found (the key is wrong). In the first instance the key is added onto the accumalator (<code>acc</code>) in <code>f</code> and in the second the accumalator is returned as concatenating a list with an empty list is the list. The empty list is returned by <code>breakCipher'</code>.</p>
 <p><a id="listing"></a></p>
 <h4 id="full-code-listing">Full code listing</h4>
-<p>To see an example of how to use it visit <a href="https://github.com/m0a0t0/Small-Haskell-Things/tree/master/uncipher">the github page</a>.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> System.IO
 <span class="kw">import</span> Data.List (nub, lookup, foldl')
 <span class="kw">import</span> Data.Maybe (fromMaybe)
