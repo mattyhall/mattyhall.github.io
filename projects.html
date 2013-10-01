@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Projects</title>
+        <link rel="stylesheet" type="text/css" href="./css/default.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="./">Matthew Hall</a>
+            </div>
+            <div id="navigation">
+                <a href="./">Home</a>
+                <a href="./projects.html">Projects</a>
+                <a href="./archive.html">Archive</a>
+                <a href="./about.html">About</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Projects</h1>
+
+            <p>
+Here is a list of projects that I have done over the past few years and an explanation of how they work.
+</p>
+
+<hr>
+<h3>
+<u>Imageception</u>
+</h3>
+<div class="info">
+August 2012
+</div>
+<a href="./images/imageception_big.jpg"><img class="image-left" src="./images/imageception.jpg"></a>
+<p>
+Imageception was created during <a href="http://youngrewiredstate.org">Young Rewired State</a> 2012 - a hack week for coders under the age of eighteen. The participants are mentored by adults, previous YRS participants and each other at centres dotted around the country to create something with open data. YRS started in the UK but now has events in other countries
+</p>
+
+<p>
+The idea behind Imageception was to create images from other images. The first step was to create other images out of and so I wrote a Python script to take a Flickr tag and download the Creative Commons licensed images with that tag. The bulk of the work is done by another Python script that takes an image (the one you want to make) and a directory full of images (the ones you want it made out of) and creates the image.
+</p>
+
+<p>
+The new image is built by going through each pixel of the source image, finding the colour and then finding the image that is most like that colour. This is done by adding up all the red values, all the green values and all the blue values of each image and then dividing each colour value by the number of pixels to get an average colour. The image whose average colour is closest to the one desired is picked and pasted into the final image.
+</p>
+
+<p>
+I then created a small website that allowed you to click on one of the individual images (the pixels of the original image) and it would then make that image out of images, hence “Imageception”.
+</p>
+
+<p>
+The code is on Github <a href="https://github.com/mattyhall/Imageception">here</a>.
+</p>
+
+<p>
+<b>Tools used:</b> Python, Python Image Library, The Flickr API
+</p>
+<hr>
+<h3>
+<u>The North-South Divide</u>
+</h3>
+<div class="info">
+August 2013
+</div>
+<img class="image-right" width="650" height="315" src="./images/north_south.jpg">
+<p>
+The North-South Divide was the project I and a few other people created at my second YRS in 2013. The aim of the project was to try and calculate where in the UK the North-South Divide is, using open data. For those who don’t know the North-South divide is the idea that there is a difference between the North of the United Kingdom and the South. These differences can be cultural or economical, for example the South is often though of as richer than the North and the North is often thought to have worse living conditions. You can read more at <a href="https://en.wikipedia.org/wiki/North%E2%80%93South_divide_in_the_United_Kingdom">Wikipedia</a>
+</p>
+
+<p>
+The problem with the divide is that it changes depending on who you talk to; some people thing it cuts through the Midlands, others think it’s just below Manchester; so I thought it would be a good idea to try and analyse some data. We decided to pick crime data, as it already had a latitude and longitude which made our lives easier
+</p>
+
+<p>
+I then got to work on trying to calculate where the divide is. To do this I split the country up into a grid and counted the number of data points (eg crimes) in the cell. For each column of the country the program would find at which cell the area above it was the most different to the area below it and drew a line. Joining them up gave us a dividing line. The average of that line was then taken.
+</p>
+
+<p>
+We then started adding more data sets. The biggest limitation at this point was that the program did not account for population, so the line was weighted towards big cities where there is a bigger population. Therefore we added a population data set and then others. Unfortunately much of this data only had postcodes as a position, so a member of the team wrote a script to lookup the latitude and longitude of the postcode/
+</p>
+
+<p>
+The code is on Github <a href="https://github.com/mattyhall/North-South-Divide">here</a>.
+</p>
+
+<p>
+<b>Tools used:</b> Python, HTML, Javascript, JQuery, Google Maps API
+</p>
+
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>

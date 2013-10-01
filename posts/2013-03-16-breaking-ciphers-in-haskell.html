@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Breaking ciphers in haskell</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">Matthew Hall</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../projects.html">Projects</a>
+                <a href="../archive.html">Archive</a>
+                <a href="../about.html">About</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Breaking ciphers in haskell</h1>
+
+            <div class="info">
+    Posted on 16th March 2013 under <a href="../tags/haskell.html">haskell</a>, <a href="../tags/programming.html">programming</a>
+</div>
+
+<p>Today I would like to share with you one of the first pieces of Haskell code I wrote that was more than ten lines long. It is a program to break a cipher.</p>
+<p><strong>If you want to just look at the code, without the explain-y bit, scroll to the bottom or <a href="#listing">click here</a></strong></p>
+<p>Ciphers are a method of encrypting text. For this blog post I will be looking at <a href="http://en.wikipedia.org/wiki/Substitution_cipher">substitution ciphers</a> specifically. A substitution cipher is where each letter in the text that you want to encrypt is subsituted with another character – the same letter, a different letter, a number etc. One of the most famous ones is ROT13, where each letter is substituted with the letter 13 places to the right, for example the letter ‘A’ is substituted with ‘N’.</p>
+<p>The normal method of breaking a cipher is by <a href="http://en.wikipedia.org/wiki/Frequency_analysis">frequency analysis</a>. When using this method the occurences of each character is counted; then each character is assigned a letter depending on how frequent the character was. The most frequent character in the cipher text is assigned the most frequent letter in English (“e”), the second-most frequent character the second-most frequent letter and so on. It is then decrypted and the text should be the original message.</p>
+<p>However, I did not use this approach. Instead I used word-pattern analysis. This involves taking the first word from the ciphered text, for example “<code>qokkz</code>”. The pattern of the word is then found; for the example it would be <code>ABCCD</code> as there is a <code>q</code> which becomes <code>A</code>, a <code>o</code> which become <code>B</code>, a <code>k</code> which becomes <code>C</code>, another <code>k</code> which we already know is <code>C</code> and then finally another unique character <code>z</code>, which becomes <code>D</code>. Next we have to look up all the words that have the same pattern. For each one we say that each letter corresponds to the same letter in ciphered word. This becomes our key, eg:</p>
+<pre class="text"><code>qokkz (ABCCD) could be:
+       hello (key: {q =&gt; h, o =&gt; e, l =&gt; k, z =&gt; o})
+       cello (key: {q =&gt; c, o =&gt; e, l =&gt; k, z =&gt; o})</code></pre>
+<p>For each possible key we continuing the process – getting the next word, get the pattern, find words that fit the pattern, find the words that also fit the key – until there are no words left. Hopefully this will be clearer in code!</p>
+<p>Both methods have there strengths. Frequency analysis can be used when there are no spaces in the text as it does not need to know where words begin and end, word-pattern analysis cannot. When I wrote this program frequency analysis seemed the more difficult option because it meant thinking of what to do when “<code>e</code>” was not the the most frequent (or “<code>a</code>” was not the second most frequent etc). Therefore I went with word-pattern analysis.</p>
+<h4 id="the-code">The code</h4>
+<p>So the first step is to import some modules:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> System.IO
+<span class="kw">import</span> Data.List (nub, lookup, foldl')
+<span class="kw">import</span> Data.Maybe (fromMaybe)
+<span class="kw">import</span> <span class="kw">qualified</span> Data.Map <span class="kw">as</span> M</code></pre>
+<p>With that done we need a function that takes a word and returns the pattern:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">wordToPattern ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+wordToPattern xs <span class="fu">=</span> foldl (\acc x <span class="ot">-&gt;</span> acc <span class="fu">++</span> [fromMaybe <span class="ch">' '</span> <span class="fu">$</span> M.lookup x table]) <span class="st">&quot;&quot;</span> xs
+    <span class="kw">where</span> table <span class="fu">=</span> M.fromList <span class="fu">$</span> zip (nub xs) [<span class="ch">'a'</span><span class="fu">..</span><span class="ch">'z'</span>]</code></pre>
+<p>This function takes a string (<code>xs</code>) and folds over it. The annonymous function looks up the values of the character it is passed in the variable <code>table</code> and appends result to the accumalator (<code>acc</code>). So what is <code>table</code>? <code>table</code> uses the function <code>nub</code> to get all the unique characters in the string <code>xs</code> and puts each one in a tuple with a unique letter using the <code>zip</code> function. <code>zip</code> takes two lists and for each element in the first list returns a tuple with the element and the corrosponding element from the second list. For example, the word “hello” would become <code>[('h', 'a'), ('e', 'b'), ('l', 'c'), ('o', 'd')]</code>. It is then put in a map.</p>
+<p>Next we need to get some real words from a dictionary and their patterns. To make things easier I used a map with the pattern as the key and a list of words with that pattern as the value:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">dictionaryPattern ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">String</span> [<span class="dt">String</span>]
+dictionaryPattern xs <span class="fu">=</span> foldl (\acc x <span class="ot">-&gt;</span> M.insertWith (<span class="fu">++</span>) (wordToPattern x) [x] acc) M.empty <span class="fu">$</span> words xs</code></pre>
+<p>Nothing too tricky going on here. We fold over all the words in <code>xs</code> (presumably from a dictionary) and get the pattern for each word. The word is then inserted into the map with the pattern as the key. If the key is not already in the map a list with the word is in, otherwise the word is added onto the end of the value using the function <code class="sourceCode haskell"><span class="fu">++</span></code>.</p>
+<p>Also we could do with a function that unciphers some text using a key:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">uncipher ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+uncipher xs key <span class="fu">=</span> map (\x <span class="ot">-&gt;</span> fromMaybe <span class="ch">' '</span> <span class="fu">$</span> M.lookup x key) xs</code></pre>
+<p>The only thing of note here is that if the character is unknown (it is not in the key) then it becomes a space.</p>
+<p>There is one last utility function to look at, <code>wordFitsKey</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">wordFitsKey ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+wordFitsKey (x<span class="fu">:</span>xs) (y<span class="fu">:</span>ys) key
+    <span class="fu">|</span> or [x  <span class="fu">==</span> y, and [x <span class="fu">==</span> <span class="ch">' '</span>, y <span class="ot">`notElem`</span> (map snd <span class="fu">$</span> M.assocs key)]] <span class="fu">=</span> wordFitsKey xs ys key
+    <span class="fu">|</span> otherwise                                                          <span class="fu">=</span> <span class="dt">False</span>
+wordFitsKey [] [] _ <span class="fu">=</span> <span class="dt">True</span></code></pre>
+<p>This function takes two words and a key. It returns true if all the characters are either equal to each other or if the character in the first string is unknown (a space) and the character in the second string has not been discovered yet.</p>
+<p>So now onto the meat of the program – breaking the cipher. It will need to take a list of ciphered words, a map with actual words in and the key so far. Let’s look at it a few lines at a time:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">breakCipher' ::</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">String</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> [<span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span>]
+breakCipher'  []     _    key <span class="fu">=</span> [key]
+breakCipher' (x<span class="fu">:</span>xs) dict key <span class="fu">=</span> foldl' f [] wordsThatFit 
+    <span class="kw">where</span> wordsThatFit <span class="fu">=</span> filter (\y <span class="ot">-&gt;</span> wordFitsKey unciphered y key) <span class="fu">$</span> fromMaybe [] 
+                                                                     <span class="fu">$</span> M.lookup (wordToPattern x) dict
+          unciphered <span class="fu">=</span> uncipher x key</code></pre>
+<p>If there are no words left then the key is returned in a list. The key line, however, is the third. It filters a list of words that have the same pattern as the first word (<code>x</code>). It filters on whether the unciphered word; which for the first word would be a string with spaces in as there are no mappings in the key and so the <code>fromMaybe</code> call in <code>uncipher</code> would return a space for each character in the string as the <code class="sourceCode haskell">M.lookup</code> will be <code class="sourceCode haskell"><span class="dt">Nothing</span></code>; fits the actual word. It then folds over each of the possible words with a function called <code>f</code>. If there are no words that fit, due to the key being wrong, then an empty list is returned.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">f acc y <span class="fu">=</span> acc <span class="fu">++</span> breakCipher' xs dict (updateKey x y key)</code></pre>
+<p>We can see that all <code>f</code> does is call <code>breakCipher'</code> on the rest of the words with an updated key, given by the function <code>updateKey</code>.</p>
+<p>The <code>updateKey</code> takes three arguments: the ciphered word, the real word we are trying and the current key. Here it is:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">updateKey ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span>
+updateKey (x'<span class="fu">:</span>xs') (y<span class="fu">:</span>ys) key' <span class="fu">=</span> updateKey xs' ys <span class="fu">$</span> M.insert x' y key'
+updateKey []       []     key' <span class="fu">=</span> key'</code></pre>
+<p>It is another recursive function. Each call it takes the first characters from the what is left of the ciphered and real words. It then inserts into the key the ciphered character as the key and the real character as the value. It recurses until the two words are empty and then returns the update key.</p>
+<p><code>breakCipher'</code> keeps recursing until there are no words left or there are no words found (the key is wrong). In the first instance the key is added onto the accumalator (<code>acc</code>) in <code>f</code> and in the second the accumalator is returned as concatenating a list with an empty list is the list. The empty list is returned by <code>breakCipher'</code>.</p>
+<p><a id="listing"></a></p>
+<h4 id="full-code-listing">Full code listing</h4>
+<p>To see an example of how to use it visit <a href="https://github.com/m0a0t0/Small-Haskell-Things/tree/master/uncipher">the github page</a>.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> System.IO
+<span class="kw">import</span> Data.List (nub, lookup, foldl')
+<span class="kw">import</span> Data.Maybe (fromMaybe)
+<span class="kw">import</span> <span class="kw">qualified</span> Data.Map <span class="kw">as</span> M
+
+<span class="ot">dictionaryPattern ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">String</span> [<span class="dt">String</span>]
+dictionaryPattern xs <span class="fu">=</span> foldl (\acc x <span class="ot">-&gt;</span> M.insertWith (<span class="fu">++</span>) (wordToPattern x) [x] acc) M.empty <span class="fu">$</span> words xs
+          
+<span class="ot">wordToPattern ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+wordToPattern xs <span class="fu">=</span> foldl (\acc x <span class="ot">-&gt;</span> acc <span class="fu">++</span> [fromMaybe <span class="ch">' '</span> <span class="fu">$</span> M.lookup x table]) <span class="st">&quot;&quot;</span> xs
+    <span class="kw">where</span> table <span class="fu">=</span> M.fromList <span class="fu">$</span> zip (nub xs) [<span class="ch">'a'</span><span class="fu">..</span><span class="ch">'z'</span>]
+
+breakCipher xs dict <span class="fu">=</span> breakCipher' xs dict M.empty
+
+<span class="ot">breakCipher' ::</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">String</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> [<span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span>]
+breakCipher' (x<span class="fu">:</span>xs) dict key <span class="fu">=</span> foldl' f [] wordsThatFit 
+    <span class="kw">where</span> wordsThatFit <span class="fu">=</span> filter (\y <span class="ot">-&gt;</span> wordFitsKey unciphered y key) <span class="fu">$</span> fromMaybe [] 
+                                                                     <span class="fu">$</span> M.lookup (wordToPattern x) dict
+          unciphered <span class="fu">=</span> uncipher x key
+          f acc y <span class="fu">=</span> acc <span class="fu">++</span> breakCipher' xs dict (updateKey x y key)
+          updateKey (x'<span class="fu">:</span>xs') (y<span class="fu">:</span>ys) key' <span class="fu">=</span> updateKey xs' ys <span class="fu">$</span> M.insert x' y key'
+          updateKey [] [] key' <span class="fu">=</span> key'
+breakCipher' [] _ key <span class="fu">=</span> [key]
+
+<span class="ot">uncipher ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+uncipher xs dict <span class="fu">=</span> map (\x <span class="ot">-&gt;</span> fromMaybe <span class="ch">' '</span> <span class="fu">$</span> M.lookup x dict) xs
+
+<span class="ot">wordFitsKey ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+wordFitsKey (x<span class="fu">:</span>xs) (y<span class="fu">:</span>ys) key
+    <span class="fu">|</span> or [x  <span class="fu">==</span> y, and [x <span class="fu">==</span> <span class="ch">' '</span>, y <span class="ot">`notElem`</span> (map snd <span class="fu">$</span> M.assocs key)]] <span class="fu">=</span> wordFitsKey xs ys key
+    <span class="fu">|</span> otherwise                                                          <span class="fu">=</span> <span class="dt">False</span>
+wordFitsKey [] [] _ <span class="fu">=</span> <span class="dt">True</span></code></pre>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
