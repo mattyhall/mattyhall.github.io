@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Loading Minecraft worlds into Haskell - NBT</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">Matthew Hall</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../projects.html">Projects</a>
+                <a href="../archive.html">Archive</a>
+                <a href="../about.html">About</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Loading Minecraft worlds into Haskell - NBT</h1>
+
+            <div class="info">
+    Posted on 2013-10-02 under <a href="../tags/programming.html">programming</a>, <a href="../tags/haskell.html">haskell</a>
+</div>
+
+<h2 id="introduction">Introduction</h2>
+<p>Recently I have been trying to record how long I spend programming through a number of ways: the old fashioned way - writing it down - and the modern way - writing a program that watches a directory for Vim lock files, which end in <code>.swp</code>, and recording the time until there are no <code>.swp</code> files. Neither way is great but it has made me think a bit more about how I spend my time. It dawned on me that I had probably spent more time playing Minecraft than writing Haskell.</p>
+<p>I had always put these facts to the back of my mind before or just blamed it on me not having any ideas of what to program next. But then I had an idea of what to program next: a Minecraft World loader. No longer would I sit around bored; there was work to be done!</p>
+<h2 id="nbt">NBT</h2>
+<p>The first step was to find how the worlds are stored. My first instinct was to go straight to the <code>~/.minecraft/saves/</code> directory and look inside the world folders. If you do this you will see a number of folders and files. The ones we are interested in are the level.dat file and the files inside the <code>region</code> folder. All of those files are binary files but luckily there is some excellent documentation on the <a href="http://minecraft.gamepedia.com/Level.dat">Minecraft Wiki</a>.</p>
+<p>The <code>level.dat</code> file and various others use a format called the Named Binary Tag or <a href="http://minecraft.gamepedia.com/NBT_Format">NBT</a> as you can see from the link it is a compressed file and then a compound tag which has many child tags. A tag consists of a name and a payload (the data). On disk a tag is an ID, which defines the type of tag it is and therefore the type of data it carries, which is represented by a one byte integer; there is then two bytes for the length of the name; a name which is that many bytes long and then the tags payload. So, for example, to store the name of the world we might create a tag that starts with eight (for the string type), then the integer four, then the string “Name”. The payload would be six (for the length of the string) and then the string “World1”.</p>
+<h2 id="the-data">The data</h2>
+<p>First up is some imports which we’ll be using later:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> <span class="kw">qualified</span> Data.ByteString.Char8 <span class="kw">as</span> BC
+<span class="kw">import</span> <span class="kw">qualified</span> Data.ByteString.Lazy <span class="kw">as</span> BL
+<span class="kw">import</span> <span class="kw">qualified</span> Codec.Compression.Zlib <span class="kw">as</span> ZL
+<span class="kw">import</span> <span class="kw">qualified</span> Codec.Compression.GZip <span class="kw">as</span> GZ
+<span class="kw">import</span> <span class="kw">qualified</span> Data.Map <span class="kw">as</span> M
+<span class="kw">import</span> Data.Attoparsec.Lazy <span class="kw">as</span> AP
+<span class="kw">import</span> Data.Attoparsec.Binary
+<span class="kw">import</span> Data.Word
+<span class="kw">import</span> Control.Monad (void, mapM)
+<span class="kw">import</span> Control.Applicative
+<span class="kw">import</span> Data.List (lookup)
+<span class="kw">import</span> Data.Maybe (fromJust)</code></pre>
+<p>I think the best way to start with something like this is to define what the data will look like, and then move on to parsing it. This makes sure you understand the data and so (should) have better luck parsing. It’s personal preference though, so feel free to completely ignore this advice.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Tag</span> <span class="fu">=</span> <span class="dt">TagByte</span>      <span class="dt">String</span> <span class="dt">Int</span>
+         <span class="fu">|</span> <span class="dt">TagShort</span>     <span class="dt">String</span> <span class="dt">Int</span>
+         <span class="fu">|</span> <span class="dt">TagInt</span>       <span class="dt">String</span> <span class="dt">Int</span>
+         <span class="fu">|</span> <span class="dt">TagLong</span>      <span class="dt">String</span> <span class="dt">Int</span>
+         <span class="fu">|</span> <span class="dt">TagFloat</span>     <span class="dt">String</span> <span class="dt">Float</span>
+         <span class="fu">|</span> <span class="dt">TagDouble</span>    <span class="dt">String</span> <span class="dt">Double</span>
+         <span class="fu">|</span> <span class="dt">TagByteArray</span> <span class="dt">String</span> [<span class="dt">Int</span>]
+         <span class="fu">|</span> <span class="dt">TagString</span>    <span class="dt">String</span> <span class="dt">String</span>   
+         <span class="fu">|</span> <span class="dt">TagList</span>      <span class="dt">String</span> [<span class="dt">Tag</span>]
+         <span class="fu">|</span> <span class="dt">TagCompound</span>  <span class="dt">String</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">Tag</span>)
+         <span class="fu">|</span> <span class="dt">TagIntArray</span>  <span class="dt">String</span> [<span class="dt">Int</span>]
+         <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre>
+<p>I created a tag data type with constructors for each type of tag defined in the NBT spec. As you can see each constructor has a <code>String</code> argument, for the name, and a second argument, for the payload.</p>
+<h2 id="parsing">Parsing</h2>
+<p>There are many good solutions to parsing binary data formats in Haskell; there is the <a href="http://hackage.haskell.org/package/binary">binary package</a> and many others. But I decided to go with using <a href="http://hackage.haskell.org/package/attoparsec">attoparsec</a>, a parser combinator library, and the <a href="http://hackage.haskell.org/package/attoparsec-binary">attoparsec-binary package</a> which allows the user to match words of sizes 12, 32 and 64 bits. I do not know whether using this library and attoparsec is the best way to go about this sort of task, but it seemed to work well enough. The program will be parsing ByteStrings, a more performant String than Haskell’s built in type.</p>
+<p>As I have already outlined each tag starts with an ID, the length of its name and then its name, so it makes sense to write one function to do this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagHeader ::</span> <span class="dt">Word8</span> <span class="ot">-&gt;</span> <span class="dt">Parser</span> <span class="dt">String</span>
+parseTagHeader id <span class="fu">=</span> (word8 id <span class="fu">&gt;&gt;</span> anyWord16be <span class="fu">&gt;&gt;=</span> fmap BC.unpack <span class="fu">.</span> AP.take <span class="fu">.</span> fromIntegral)</code></pre>
+<p>The first line, for those unfamiliar with Haskell, is the type signature and tells us what arguments the function accepts and what value it returns. Here we take a <code>Word8</code> which is just a number one byte long and return a String inside the <code>Parser</code> monad. The fact <code>Parser</code> is a monad allows us to sequence functions that return it, without having to worry about parse errors. If this is completely new to you, you may want to read <a href="http://blog.sigfpe.com/2006/08/you-could-have-invented-monads-and.html">You Could Have Invented Monads</a>.</p>
+<p>The next line is the function itself. If you aren’t very experienced with Haskell it may be a bit intimidating, so I shall break it down. The <code>word8</code> parser, provided by Attoparsec, matches the ID we pass to parseTagHeader. The <code>&gt;&gt;</code> operator disregards the returned value of its first argument (<code>word8 id</code>) and allows its second to be evaluated. <code>anyWord16be</code> consumes sixteen bits and gives them back to us as a <code>Word8</code>, which is passed to the last part of the line by <code>&gt;&gt;=</code>, without its <code>Parser</code> “wrapping”. This value is then turned into an integer by <code>fromIntegral</code> and that number of bytes is consumed by Attoparsec’s <code>take</code> function. This is the name of the tag. We then use <code>fmap</code> to apply the <code>BC.unpack</code> function to the value returned by AP.take, which is of the type <code>Parser ByteString</code>. <code>fmap</code> removes the <code>Parser</code> wrapping, applies the function and adds the wrapping again. <code>BC.unpack</code> changes the <code>ByteString</code> and turns it into a normal Haskell <code>String</code>.</p>
+<p>We can now define parsers for the simple, numerical tag types in just one line each! For example:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagByte ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagByte <span class="fu">=</span> <span class="dt">TagByte</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">1</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord8)
+
+<span class="ot">parseTagShort ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagShort <span class="fu">=</span> <span class="dt">TagShort</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">2</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord16be)
+
+<span class="ot">parseTagInt ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagInt <span class="fu">=</span> <span class="dt">TagInt</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">3</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be)
+
+<span class="ot">parseTagLong ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagLong <span class="fu">=</span> <span class="dt">TagLong</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">4</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord64be)
+
+<span class="ot">parseTagFloat ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagFloat <span class="fu">=</span> <span class="dt">TagFloat</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">5</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be)
+
+<span class="ot">parseTagDouble ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagDouble <span class="fu">=</span> <span class="dt">TagDouble</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">6</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord64be)</code></pre>
+<p>The <code>&lt;$&gt;</code> operator is just the infix version of <code>fmap</code>. As <code>TagByte</code>, <code>TagShort</code> and all have two arguments if we apply them to just one - eg. the results of <code>parseTagHeader 1</code> - then we get another function that takes one argument. The <code>&lt;*&gt;</code> operator applies this function, that is in a <code>Parser</code>, and applies the value of its second argument; in this case, an integer.</p>
+<p>We can also add in the <code>TagString</code> parser, which is a little more complicated:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagString ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagString <span class="fu">=</span> <span class="dt">TagString</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">8</span> <span class="fu">&lt;*&gt;</span> (fmap fromIntegral anyWord16be <span class="fu">&gt;&gt;=</span> AP.take 
+                                                                                   <span class="fu">&gt;&gt;=</span> return <span class="fu">.</span> BC.unpack)</code></pre>
+<p>For the payload we have to parse an integer, take that number of characters and turn it into a string.</p>
+<h2 id="compound-tags">Compound tags</h2>
+<p>However, there are still a few more tag types - arrays, lists and a compound type. These are a little more complicated then just numbers so I define functions to parse them:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagByteArrayNoHeader ::</span> <span class="dt">Parser</span> [<span class="dt">Int</span>]
+parseTagByteArrayNoHeader <span class="fu">=</span> <span class="kw">do</span>
+  len <span class="ot">&lt;-</span> fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be
+  mapM (const (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord8)) [<span class="dv">1</span> <span class="fu">..</span> len]</code></pre>
+<p>To parse the payload of a byte array we parse a length and then parse that many bytes. <code>mapM</code> takes a monadic function (like one that returns a <code>Parser</code>) and applies it to each element of a list. <code>const</code> takes a function and some arguments and returns the function, so that the elements of the list are not applied to the <code>anyWord8</code> parser. There is a similar function for int arrays.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">idToFunc ::</span> [(<span class="dt">Int</span>, <span class="dt">Parser</span> <span class="dt">Tag</span>)]
+idToFunc <span class="fu">=</span> [(<span class="dv">1</span>, <span class="dt">TagByte</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord8)),
+            (<span class="dv">2</span>, <span class="dt">TagShort</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord16be)),
+            (<span class="dv">3</span>, <span class="dt">TagInt</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be)),
+            (<span class="dv">4</span>, <span class="dt">TagLong</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord64be)),
+            (<span class="dv">5</span>, <span class="dt">TagFloat</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be)),
+            (<span class="dv">6</span>, <span class="dt">TagDouble</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fromIntegral <span class="fu">&lt;$&gt;</span> anyWord64be)),
+            (<span class="dv">7</span>, <span class="dt">TagByteArray</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> parseTagByteArrayNoHeader),
+            (<span class="dv">8</span>, <span class="dt">TagString</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> (fmap fromIntegral anyWord16be <span class="fu">&gt;&gt;=</span> AP.take 
+                                            <span class="fu">&gt;&gt;=</span> return <span class="fu">.</span> BC.unpack)),
+            (<span class="dv">9</span>, <span class="dt">TagList</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> parseTagListNoHeader),
+            (<span class="dv">10</span>, <span class="dt">TagCompound</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> parseTagCompoundNoHeader),
+            (<span class="dv">11</span>, <span class="dt">TagIntArray</span> <span class="fu">&lt;$&gt;</span> pure <span class="st">&quot;&quot;</span> <span class="fu">&lt;*&gt;</span> parseTagIntArrayNoHeader)]
+
+<span class="ot">parseTagListNoHeader ::</span> <span class="dt">Parser</span> [<span class="dt">Tag</span>]
+parseTagListNoHeader <span class="fu">=</span> <span class="kw">do</span>
+  id <span class="ot">&lt;-</span> fromIntegral <span class="fu">&lt;$&gt;</span> anyWord8
+  len <span class="ot">&lt;-</span> fromIntegral <span class="fu">&lt;$&gt;</span> anyWord32be
+  <span class="kw">let</span> f <span class="fu">=</span> fromJust <span class="fu">$</span> lookup id idToFunc
+  mapM (const f) [<span class="dv">1</span> <span class="fu">..</span> len]</code></pre>
+<p>And now we come to the messy part. A list consists of an ID, then the number of elements and then that number of the tags (with the ID defined earlier) payloads. So a list is a list of tags without their header. Therefore we have an associative list that maps IDs to functions that parse the payload of that tag type.</p>
+<p>To parse a compound tag we just keep parsing tags until we find an end tag and then insert each tag into a hash map with its name as the key:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagEnd ::</span> <span class="dt">Parser</span> ()
+parseTagEnd <span class="fu">=</span> void (word8 <span class="dv">0</span>)
+
+<span class="ot">parseTagCompoundNoHeader ::</span> <span class="dt">Parser</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">Tag</span>)
+parseTagCompoundNoHeader <span class="fu">=</span> <span class="kw">do</span>
+  tags <span class="ot">&lt;-</span> many parseTag
+  parseTagEnd
+  <span class="kw">let</span> map <span class="fu">=</span> foldl (\acc t <span class="ot">-&gt;</span> M.insert (tagName t) t acc) M.empty tags
+  return map </code></pre>
+<p>We can then define parsers for each compound tag, with a header, and one to parse any tag (<code>&lt;|&gt;</code> is <code>||</code> for two parsers):</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTagList ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagList <span class="fu">=</span> <span class="dt">TagList</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">9</span> <span class="fu">&lt;*&gt;</span> parseTagListNoHeader
+
+<span class="ot">parseTagCompound ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagCompound <span class="fu">=</span> <span class="dt">TagCompound</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">10</span> <span class="fu">&lt;*&gt;</span> parseTagCompoundNoHeader
+
+<span class="ot">parseTagIntArray ::</span> <span class="dt">Parser</span> <span class="dt">Tag</span>
+parseTagIntArray <span class="fu">=</span> <span class="dt">TagIntArray</span> <span class="fu">&lt;$&gt;</span> parseTagHeader <span class="dv">11</span> <span class="fu">&lt;*&gt;</span> parseTagIntArrayNoHeader
+
+parseTag <span class="fu">=</span> parseTagByte <span class="fu">&lt;|&gt;</span> parseTagShort <span class="fu">&lt;|&gt;</span> parseTagInt <span class="fu">&lt;|&gt;</span> parseTagLong <span class="fu">&lt;|&gt;</span> parseTagFloat
+                        <span class="fu">&lt;|&gt;</span> parseTagDouble <span class="fu">&lt;|&gt;</span> parseTagByteArray <span class="fu">&lt;|&gt;</span> parseTagString 
+                        <span class="fu">&lt;|&gt;</span> parseTagList <span class="fu">&lt;|&gt;</span> parseTagCompound <span class="fu">&lt;|&gt;</span> parseTagIntArray</code></pre>
+<h2 id="finishing-up">Finishing up</h2>
+<p>The final job is to try and parse an NBT file, like <code>level.dat</code>, but first we need to uncompress it. NBT data can be compressed by either GZip or ZLib, so we take an argument to tell us which one it is</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseNBT ::</span> <span class="dt">BL.ByteString</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Result</span> <span class="dt">Tag</span>
+parseNBT xs compression <span class="fu">=</span> parse parseTag nbt
+  <span class="kw">where</span> nbt <span class="fu">=</span> <span class="kw">if</span> compression <span class="fu">==</span> <span class="dv">0</span> 
+                <span class="kw">then</span> GZ.decompress xs
+                <span class="kw">else</span> ZL.decompress xs
+
+main <span class="fu">=</span> <span class="kw">do</span>
+  contents <span class="ot">&lt;-</span> BL.readFile <span class="st">&quot;World/level.dat&quot;</span>
+  print <span class="fu">$</span> parseNBT contents <span class="dv">0</span></code></pre>
+<p>If you run the file you should end up with something like this:</p>
+<pre><code>Done &quot;&quot; TagCompound &quot;&quot; (fromList [(&quot;Data&quot;,TagCompound &quot;Data&quot; 
+(fromList [(&quot;DayTime&quot;,TagLong &quot;DayTime&quot; 2654),(&quot;GameRules&quot;,TagCompound &quot;GameRules&quot; 
+(fromList [(&quot;commandBlockOutput&quot;,TagString &quot;commandBlockOutput&quot; &quot;true&quot;),
+(&quot;doFireTick&quot;,TagString &quot;doFireTick&quot; &quot;true&quot;),(&quot;doMobLoot&quot;,TagString &quot;doMobLoot&quot; &quot;true&quot;),
+(&quot;doMobSpawning&quot;,TagString &quot;doMobSpawning&quot; &quot;true&quot;),(&quot;doTileDrops&quot;,TagString &quot;doTileDrops&quot; &quot;true&quot;),
+(&quot;keepInventory&quot;,TagString &quot;keepInventory&quot; &quot;false&quot;),(&quot;mobGriefing&quot;,TagString &quot;mobGriefing&quot; &quot;true&quot;)])),
+(&quot;GameType&quot;,TagInt &quot;GameType&quot; 1),(&quot;LastPlayed&quot;,TagLong &quot;LastPlayed&quot; 1380368679036),
+(&quot;LevelName&quot;,TagString &quot;LevelName&quot; &quot;New World&quot;),(&quot;MapFeatures&quot;,TagByte &quot;MapFeatures&quot; 1),
+(&quot;Player&quot;,TagCompound &quot;Player&quot; (fromList [(&quot;Air&quot;,TagShort &quot;Air&quot; 300),(&quot;AttackTime&quot;,TagShort 
+&quot;AttackTime&quot; 0), (&quot;CanPickUpLoot&quot;,TagByte &quot;CanPickUpLoot&quot; 0),(&quot;CustomName&quot;,TagString &quot;CustomName&quot; &quot;&quot;),
+(&quot;CustomNameVisible&quot;,TagByte &quot;CustomNameVisible&quot; 0),(&quot;DeathTime&quot;,TagShort &quot;DeathTime&quot; 0),
+(&quot;Dimension&quot;,TagInt &quot;Dimension&quot; 0),(&quot;DropChances&quot;,TagList &quot;DropChances&quot; [TagFloat &quot;&quot; 1.0348187e9,
+TagFloat &quot;&quot; 1.0348187e9,TagFloat &quot;&quot; 1.0348187e9,TagFloat &quot;&quot; 1.0348187e9,TagFloat &quot;&quot; 1.0348187e9]),
+
+...</code></pre>
+<p>The actual region files are a bit more complicated, so I shall save that for another time (if I remember)!</p>
+<h2 id="code">Code</h2>
+<p>The full code listing can be found <a href="https://gist.github.com/mattyhall/6813733">here</a></p>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
