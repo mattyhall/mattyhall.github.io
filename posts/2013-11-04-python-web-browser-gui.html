@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-44644915-1']);
+            _gaq.push(['_trackPageview']);
+
+            (function() {
+             var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+             ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+             var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+             })();
+        </script>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - A GUI in a web browser</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">Matthew Hall</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../projects.html">Projects</a>
+                <a href="../archive.html">Archive</a>
+                <a href="../about.html">About</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>A GUI in a web browser</h1>
+
+            <div class="info">
+    Posted on 2013-11-04 under <a href="../tags/programming.html">programming</a>, <a href="../tags/haskell.html">haskell</a>, <a href="../tags/python.html">python</a>
+</div>
+
+<p>So, as you may have gathered, for the past few months I’ve been messing about with the Haskell programming language. However, the language that may be referred to as my “goto” (I’m too lazy to insert some form of joke here, feel free to take a shot yourself!) is Python. After a particularly tedious project where I spent a large proportion of my time fighting the type system, which was probably down to my ineptitude, I decided it was time to get back to Python.</p>
+<p>My time in Haskell was not a waste, though. It was on the <a href="http://www.reddit.com/r/haskell">Haskell subreddit</a> that I learnt of a library called <a href="http://hackage.haskell.org/package/threepenny-gui">Threepenny-gui</a>. The idea of this library is that you use your web browser as an interface, in the place of something like GTK, QT or Cocoa. I’m not sure if Threepenny is the place where it was thought up, I did some googling but couldn’t find many others but I didn’t try to hard.</p>
+<p>You may wonder why someone would do this. If you want to create an application that is not just run on the command line you will need some form of GUI, or graphical user interface, and generally this is created using a framework like Cocoa. This isn’t too bad, until you want to make that app run on more than one operating system; some, like Cocoa, only run on one operating system - in Cocoa’s case Mac. Others, like QT or GTK, may run on more than one OS but they will have to be installed by the user. The beatuy of using a web browser for this is that the user does not need to install one of these, which usually take up quite a lot of space, they can just install your app.</p>
+<p>I decided that this was quite a neat idea and wanted to have a go at writing one in Python myself.</p>
+<h2 id="example">Example</h2>
+<p>As a test for my library I decided to create a very simple interface: a text field and a button. When the button is pressed the string “Clicked” is added to the text field. This may seem overally trivial, but it does test some key points:</p>
+<ul>
+<li>The ability to render an interface</li>
+<li>The ability to create editible elements (text field) and interactive elements (the button)</li>
+<li>The ability to handle events</li>
+</ul>
+<p>So here is the code for that interface:</p>
+<pre class="sourceCode python"><code class="sourceCode python">gui = div([heading(<span class="st">'Hello, world'</span>, <span class="dv">1</span>),
+           text(<span class="st">'This is my awesome web page'</span>),
+           form([text_input(<span class="st">'input'</span>),
+                 button(<span class="st">'Click me'</span>, <span class="st">'btn1'</span>)])], {<span class="st">'id'</span>: <span class="st">'content'</span>})
+
+
+<span class="kw">def</span> button_clicked(view):
+    view.find_by_id(<span class="st">'input'</span>).attrs[<span class="st">'value'</span>] += <span class="st">'Clicked'</span>
+
+v = View(gui, stylesheets=[<span class="st">'style.css'</span>])
+v.add_callback(<span class="st">'click'</span>, <span class="st">'btn1'</span>, button_clicked)
+v.run()</code></pre>
+<p>The first few lines is creating the interface. It creates a div element, with the id “content”, with a heading and a form as children. The form has a text input as a child and a button.</p>
+<p>The next definition, <code>button_clicked</code> is the event handler. It finds the element in the GUI with the id “input” and adds the string “Clicked” to the value.</p>
+<p>The final few lines create the View (sort of like a window in a normal framework) and then makes the click event on the elment with the id “btn1” call <code>button_clicked</code>.</p>
+<h2 id="how-does-it-work">How does it work?</h2>
+<p>As you can see the first few lines create the GUI. This is done by creating a tree of elements, so the text and form element are children of the div element. Behind the scenes this is a tree of classes which each has a <code>to_html</code> method that creates the appropriate HTML for itself.</p>
+<p>The real magic is to do with the event handling. If you look carefully at the definition of the callback you can see that it is passed a <code>view</code>, which is basically the <code>View</code> that was created below, but with the element tree changed to reflect any input done by the user. This is taken care of by a bit of Javascript + jQuery code that looks for any input tags and checks for changes. When a change happens the new value for the input is sent back to the View, via a POST request and the element tree is altered with this new information. Therefore, any change on the page is reflected in the View object passed to the callback.</p>
+<p>The final piece of the puzzle is getting the callbacks executed when their event is triggeredand updating the web page. This too is done by Javascript + jQuery. Whenever <code>add_callback</code> is called the data is entered into a list. When the page is rendered jQuery loops through the list and assigns the event that was passed (eg. click) on the id passed (eg. btn1) to fire another POST request with the id and event to the server which then dispatches accordingly.</p>
+<p>When the callback finishes execution the server remembers that it needs to update the page. Meanwhile, every 50ms (although this can be changed) the web page polls the web server to see if the page needs updating. If it does the new HTML is sent back and that is displayed.</p>
+<h2 id="problems">Problems?</h2>
+<p>Tonnes, thanks for asking! Off the top of my head:</p>
+<ul>
+<li>Having the web page poll for events probably isn’t a good way to go about it. Ideally I would have used WebSockets, so the server could send a message to the web page. <em>Probably bad</em></li>
+<li>At the moment there is a Jinja template in a Python file, not in it’s own file. <em>This is probably a bad idea.</em></li>
+<li>Said template uses a loop (as in a template loop, not a Javscript one) to go through the callbacks and generate the event triggers. <em>Definitely bad</em></li>
+<li>The name</li>
+</ul>
+<p>I am not very good at naming my projects. Luckily or unluckily, I can’t decide which, inspiration struck thanks to the library I got the idea from. The project is called <strong>Thruppence</strong>. You can grab the code <a href>here</a></p>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
