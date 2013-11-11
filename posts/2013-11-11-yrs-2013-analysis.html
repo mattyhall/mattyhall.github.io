@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-44644915-1']);
+            _gaq.push(['_trackPageview']);
+
+            (function() {
+             var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+             ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+             var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+             })();
+        </script>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Young Rewired State 2013 - An Analysis</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">Matthew Hall</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../projects.html">Projects</a>
+                <a href="../archive.html">Archive</a>
+                <a href="../about.html">About</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Young Rewired State 2013 - An Analysis</h1>
+
+            <div class="info">
+    Posted on 2013-11-11 under <a href="../tags/yrs.html">yrs</a>, <a href="../tags/stats.html">stats</a>, <a href="../tags/charts.html">charts</a>
+</div>
+
+<p>This August I participated in an event called <a href="https://youngrewiredstate.org/">Young Rewired State</a> where people aged eighteen and under come together to make cool things with open data in a week. At the end of the week there is a big event where the projects are presented and prizes awarded. All of the projects, or “hacks”, can be found at <a href="http://hacks.youngrewiredstate.org/events/YRS2013">this</a> page. I thought it would be interesting to try and find some data on these projects, eg. what languages were used.</p>
+<h2 id="method">Method</h2>
+<p>To do this I decided to scrape the hacks page and get all the projects. I would then save the github url of each project, if it existed to a database with a few extra things like the name and if it was a finalist. Unfortunately only around forty projects had a Github repository, and only thirty-five of those had any code in them.</p>
+<p>Data is then pulled down from Github like the number of stars, lagnuages used and contributors. Which is once again stored. Finally a seperate script creates charts from all this information. The code is <a href="https://github.com/mattyhall/yrs-analysis/">available as a repository on github</a>. If anyone wants me to write a blog post going into more detail on how it works I’ll happily do that. Feel free to tweet me.</p>
+<h2 id="the-moment-youve-all-been-waiting-for">The moment you’ve all been waiting for</h2>
+<p><strong>Number of projects per language</strong> - So the first chart I made was of number of projects that use each language. Not very well worded, but hopefully the image will make it clearer: <img src="../images/yrs-2013-analysis/projects_per_language.png" width="800" height="400"> As you can see the most used languages were Javascript, CSS and PHP - all web languages. This gives an idea of what most people create at YRS and that is websites. It turns out no one really writes DSLs as their YRS project. Go figure!</p>
+<p>I was quite suprised at the variety of languages in so few projects. If I’m honest I was expecting everything to be written in PHP and JS, with the occasional bit of Ruby or Python thrown in. But, as you can see, there are quite a lot - everything from functional programming languages like Scala and Erlang to curly-braces, semicolon languages like C and Go.</p>
+<p><strong>Bytes of code per language</strong> - Next up is the number of bytes of code used per language. Normally amount of code is measured in lines of code, or LOC, however for some reason Github uses number of bytes. I decided to stick with it because it made my life a lot easier. <img src="../images/yrs-2013-analysis/bytes_per_language.png" width="800" height="400"> Ah - rather embarrissingly my own hack was decided to be made up of 99% Verilog by Github. I’m not entirely sure why as it contains a grand total of zero lines of Verilog. I have to presume it is due to the data that I use, which were generally very large files and for some reason this was counted as Verilog.</p>
+<p>To be honest I do not believe this is a very good metric. One of the hacks contributes nearly all of the PHP statistics. Furthermore I expect the Javascript count will be inflated by people saving local copies of libraries like jQuery. I may well be wrong (I usually am) but just the fact that Verilog is so high up shows that this isn’t particularly useful.</p>
+<p><strong>Contributors per project</strong> - In this chart only projects that had more than one contributor are shown: <img src="../images/yrs-2013-analysis/project_contributors.png" width="800" height="400"> My experience of code collaboration usually involves email and dropbox so it’s nice to see that there are people who are more competent and better organised than me!</p>
+<p><strong>Github stars per project</strong> - Fairly self explanatory this one. Any project with one or more stars on Github are shown: <img src="../images/yrs-2013-analysis/project_stars.png" width="800" height="400"> Well done to The Scoop and contag.io, who were starred more than any other project.</p>
+<p><strong>Number of projects updated per month</strong> - This is one that is quite interesting. It shows whether projects are continued and worked upon after the event: <img src="../images/yrs-2013-analysis/projects_updated_month.png" width="800" height="400"> And the short answer is yes! About half of the projects that had code in them were updated during September and even now in November, several months after the event, a few projects are still being worked on. I think this is really awesome!</p>
+<h2 id="problems">Problems</h2>
+<p>So as I have already alluded to, this isn’t that accurate. I think it’s important to reiterate that this can only be used as a guide because:</p>
+<ul>
+<li>Only forty of the hacks had a github page that I could find, and so only that number were included in the plots. Some repos looked to have been deleted or the url was not spelt correctly</li>
+<li>Github doesn’t seem to be fantastic at listing the languages used in the repository</li>
+<li>I made this so who knows what weird and wonderful errors I have managed to come up with</li>
+<li>The graphs are ugly. I made them really quickly with matplotlib, which I am not an expert at</li>
+</ul>
+<h2 id="round-up">Round up</h2>
+<p>Anyway, I think that this post is quite an interesting, if not entirely statistically accurate, look at the YRS hacks.</p>
+<p>If you can think of any more graphs you would like me to plot, want me to go into more detail on how all this was done or anything else then send me a tweet <a href="https://twitter.com/hailmattyhall">@hailmattyhall</a></p>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
