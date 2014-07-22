@@ -47,24 +47,37 @@ Here is a list of projects that I have done over the past few years and an expla
 
 <hr>
 <h3>
-<u>StartJapanese!</u>
+<u>The North-South Divide</u>
 </h3>
 <div class="info">
-February 2011
+August 2013
 </div>
-<img class="image-right" src="./images/startjapanese.png">
+<img class="image-right" width="650" height="315" src="./images/north_south.jpg">
 <p>
-In secondary school I took Japanese for one year, during which we had to learn Hiragana and Katakana. I decided to make an app for my Android phone to aid me and StartJapanese was the result. StartJapanese is really just a basic flashcards app with decks for Hiragana and Katakana included by default. It can radomise decks, test the ones you know least first and offers question and revision modes. There is also the ability to add decks
+The North-South Divide was the project I and a few other people created at my second YRS in 2013. The aim of the project was to try and calculate where in the UK the North-South Divide is, using open data. For those who don’t know the North-South divide is the idea that there is a difference between the North of the United Kingdom and the South. These differences can be cultural or economical, for example the South is often though of as richer than the North and the North is often thought to have worse living conditions. You can read more at <a href="https://en.wikipedia.org/wiki/North%E2%80%93South_divide_in_the_United_Kingdom">Wikipedia</a>
 </p>
+
 <p>
-The decks or sets of cards are stored in a database on the phone, as are results from tests
+The problem with the divide is that it changes depending on who you talk to; some people thing it cuts through the Midlands, others think it’s just below Manchester; so I thought it would be a good idea to try and analyse some data. We decided to pick crime data, as it already had a latitude and longitude which made our lives easier
 </p>
+
 <p>
-It is available on the play store <a href="https://play.google.com/store/apps/details?id=me.uk.quickbeam.startjapaneselite&amp;hl=en">here</a>
+I then got to work on trying to calculate where the divide is. To do this I split the country up into a grid and counted the number of data points (eg crimes) in the cell. For each column of the country the program would find at which cell the area above it was the most different to the area below it and drew a line. Joining them up gave us a dividing line. The average of that line was then taken.
+</p>
+
 <p>
-<b>Tools used:</b> Java, SQL, UI Design
+We then started adding more data sets. The biggest limitation at this point was that the program did not account for population, so the line was weighted towards big cities where there is a bigger population. Therefore we added a population data set and then others. Unfortunately much of this data only had postcodes as a position, so a member of the team wrote a script to lookup the latitude and longitude of the postcode.
+</p>
+
+<p>
+The code is on Github <a href="https://github.com/mattyhall/North-South-Divide">here</a>.
+</p>
+
+<p>
+<b>Tools used:</b> Python, HTML, Javascript, JQuery, Google Maps API
 </p>
 <hr>
+
 <h3>
 <u>Imageception</u>
 </h3>
@@ -95,36 +108,26 @@ The code is on Github <a href="https://github.com/mattyhall/Imageception">here</
 <p>
 <b>Tools used:</b> Python, Python Image Library, The Flickr API
 </p>
+
 <hr>
 <h3>
-<u>The North-South Divide</u>
+<u>StartJapanese!</u>
 </h3>
 <div class="info">
-August 2013
+February 2011
 </div>
-<img class="image-right" width="650" height="315" src="./images/north_south.jpg">
+<img class="image-right" src="./images/startjapanese.png">
 <p>
-The North-South Divide was the project I and a few other people created at my second YRS in 2013. The aim of the project was to try and calculate where in the UK the North-South Divide is, using open data. For those who don’t know the North-South divide is the idea that there is a difference between the North of the United Kingdom and the South. These differences can be cultural or economical, for example the South is often though of as richer than the North and the North is often thought to have worse living conditions. You can read more at <a href="https://en.wikipedia.org/wiki/North%E2%80%93South_divide_in_the_United_Kingdom">Wikipedia</a>
+In secondary school I took Japanese for one year, during which we had to learn Hiragana and Katakana. I decided to make an app for my Android phone to aid me and StartJapanese was the result. StartJapanese is really just a basic flashcards app with decks for Hiragana and Katakana included by default. It can radomise decks, test the ones you know least first and offers question and revision modes. There is also the ability to add decks
 </p>
-
 <p>
-The problem with the divide is that it changes depending on who you talk to; some people thing it cuts through the Midlands, others think it’s just below Manchester; so I thought it would be a good idea to try and analyse some data. We decided to pick crime data, as it already had a latitude and longitude which made our lives easier
+The decks or sets of cards are stored in a database on the phone, as are results from tests
 </p>
-
 <p>
-I then got to work on trying to calculate where the divide is. To do this I split the country up into a grid and counted the number of data points (eg crimes) in the cell. For each column of the country the program would find at which cell the area above it was the most different to the area below it and drew a line. Joining them up gave us a dividing line. The average of that line was then taken.
+It is available on the play store <a href="https://play.google.com/store/apps/details?id=me.uk.quickbeam.startjapaneselite&amp;hl=en">here</a>
 </p>
-
 <p>
-We then started adding more data sets. The biggest limitation at this point was that the program did not account for population, so the line was weighted towards big cities where there is a bigger population. Therefore we added a population data set and then others. Unfortunately much of this data only had postcodes as a position, so a member of the team wrote a script to lookup the latitude and longitude of the postcode/
-</p>
-
-<p>
-The code is on Github <a href="https://github.com/mattyhall/North-South-Divide">here</a>.
-</p>
-
-<p>
-<b>Tools used:</b> Python, HTML, Javascript, JQuery, Google Maps API
+<b>Tools used:</b> Java, SQL, UI Design
 </p>
 
 

@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-44644915-1']);
+            _gaq.push(['_trackPageview']);
+
+            (function() {
+             var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+             ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+             var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+             })();
+        </script>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Merging multiple migrations into one statement</title>
+        <link rel="stylesheet" type="text/css" href="../css/bootstrap.css" />
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    </head>
+    <body>
+        <div class="container">
+          <nav class="navbar navbar-fixed-top">
+              <div id="logo" class="navbar-header">
+                  <a href="../">Matthew Hall</a>
+              </div>
+              <div id="navigation" class="nav navbar-nav navbar-collapse">
+                  <a href="../">Home</a>
+                  <a href="../projects.html">Projects</a>
+                  <a href="../archive.html">Archive</a>
+                  <a href="../about.html">About</a>
+              </div>
+              <div class="navbar-right marks">
+                <a href="https://github.com/mattyhall/"><img src="../images/github_mark.png" /></a>
+                <a href="http://twitter.com/hailmattyhall"><img src="../images/twitter_mark.png" /></a>
+              </div>
+          </nav>
+        </div>
+        <div id="content" class="container">
+            <div class="row">
+                <h1>Merging multiple migrations into one statement</h1>
+
+                <div class="info">
+    Posted on 2014-07-22 under <a href="../tags/haskell.html">haskell</a>, <a href="../tags/programming.html">programming</a>
+</div>
+
+<p>Yep, I’m back with more boringly named blog posts! In this post we’ll take a <code>CREATE TABLE</code> statement and a list of <code>ALTER TABLE</code> statements and turn them into a single <code>CREATE TABLE</code> statement. We’ll do so with a helping hand from Haskell, Attoparsec and Lens but first an explanation of migrations. Feel free to skip.</p>
+<h2 id="intro">Intro</h2>
+<p>For those of you familiar with web frameworks like Rails you will have heard of migrations. Most web apps have a database of some kind and as you’re developing your website it is quite likely that you will need to make alterations to your tables. These are migrations - they change the schema of a table. They could be in the form of raw SQL statements or they could be in the form of a program with a special DSL for databases. This is the approach Rails uses.</p>
+<p>This is great as you are developing but what about when you are deploying or when you decide to create the database from scratch? If each migration were to be run one after another it would be very slow and may be unreliable, due to the fact that a migration is basically a one time script which tend not to be maintained. What most systems do instead is to store the current schema and then load that into a frest database. As far as I can tell this could be done in one of two ways:</p>
+<ol style="list-style-type: decimal">
+<li>After each migration is done ask the database for the current schema and store that.</li>
+<li>Get all the migrations that have been applied and the original statement which created the table and from this generate a single statement which will create the table in its correct form.</li>
+</ol>
+<p>There are, as with everything in life, pros and cons to each. The first method requires you to have run all the migrations one after another at least once. This doesn’t seem like too much of a problem but you would have to be careful not to misplace the file with the schema in, otherwise you have to run the migrations one after another and you have no longer solved the problem. You would also have to get the schema from the database and parse this information which may appear differently depending on what database engine you are using.</p>
+<p>The main problem with the second approach is that it is not as likely to be correct. If you are getting the information straight from the horse’s mouth - the working database - then, if your careful about parsing this information, you can be pretty sure you’re right. Deducing the schema from the migrations is not as likely to be correct. You also have a problem in that some databases may have different syntax but this can be negated if you try and stick to syntax they can all interpret. There is a spec for SQL so you could just stick to that in your migrations.</p>
+<p>I decided to have a go at building a program which followed the second method. I’m pretty sure that Rails and others use the first way but I thought that the second method was a more interesting problem to solve.</p>
+<h2 id="data-types">Data types</h2>
+<p>So the first task will be to parse the SQL statements into something we can pattern match on. Let’s define some Abstract Data Types (ADTs):</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE TemplateHaskell #-}</span>
+<span class="kw">module</span> <span class="dt">Types</span> <span class="kw">where</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span>
+
+<span class="kw">data</span> <span class="dt">Type</span> <span class="fu">=</span> <span class="dt">CInt</span>
+          <span class="fu">|</span> <span class="dt">CChar</span> <span class="dt">Int</span>
+          <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="kw">data</span> <span class="dt">Constraint</span> <span class="fu">=</span> <span class="dt">NotNull</span>
+                <span class="fu">|</span> <span class="dt">PrimaryKey</span>
+                <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre>
+<p>First up we have the column types. For simplicity I’ve just picked a couple of types from the <a href="http://www.postgresql.org/docs/8.4/static/datatype.html">documentation of postgresql</a>. The <code>Char</code> type stores an integer which says how many characters the column can hold. There is also an ADT for constraints. Constraints are conditions the value for a column must satisfy. Once again I have only picked a couple to show.</p>
+<p>Also note the language pragma and imports I have included. TemplateHaskell will be used for the <a href="https://hackage.haskell.org/package/lens">lens library</a>. For those of you who don’t know lenses are a nice way to access data inside ADTs and change it - something that can sometimes be difficult in Haskell. <code>Data.Text</code> is imported as a replacement for <code>String</code> and a <code>Map</code> (or dictionary if you’re from the Python world) to link the names of columns to the type and constraints for that column.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Column</span> <span class="fu">=</span> <span class="dt">Column</span> { _<span class="ot">typ ::</span> <span class="dt">Type</span>
+                     , _<span class="ot">constraints ::</span> [<span class="dt">Constraint</span>]
+                     } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+makeLenses <span class="ch">''</span><span class="dt">Column</span></code></pre>
+<p>There’s nothing too surprising in the definition of the <code>Column</code> type (a column has a type and some constraints, easy) except perhaps the lack of a column name. The reason for this is that we are going to store the columns in a <code>Map</code> where the name of the column is the key. We could have just said that a table contains a list of columns and stuck the name in the <code>Column</code> data type but this would mean you would have to search the list for the correct column when making alterations to it.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Statement</span> <span class="fu">=</span> <span class="dt">Create</span> <span class="dt">T.Text</span> <span class="dt">CreateStatement</span>
+               <span class="fu">|</span> <span class="dt">Alter</span> <span class="dt">T.Text</span> <span class="dt">AlterStatement</span>
+               <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="kw">data</span> <span class="dt">AlterStatement</span> <span class="fu">=</span> <span class="dt">RenameTable</span> <span class="dt">T.Text</span>
+                    <span class="fu">|</span> <span class="dt">RenameColumn</span> <span class="dt">T.Text</span> <span class="dt">T.Text</span>
+                    <span class="fu">|</span> <span class="dt">AddColumn</span> <span class="dt">T.Text</span> <span class="dt">Column</span>
+                    <span class="fu">|</span> <span class="dt">DropColumn</span> <span class="dt">T.Text</span>
+                    <span class="fu">|</span> <span class="dt">ChangeColumnType</span> <span class="dt">T.Text</span> <span class="dt">Type</span>
+                    <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="kw">data</span> <span class="dt">CreateStatement</span> <span class="fu">=</span> <span class="dt">CreateTable</span> { _<span class="ot">cols ::</span> <span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">Column</span>
+                                   } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+makeLenses <span class="ch">''</span><span class="dt">CreateStatement</span></code></pre>
+<p>Finally we have the definitions of the statements themselves. First we say that a statement can either be a <code>Create</code> or an <code>Alter</code>. The <code>Text</code> value for these is the table they are creating or acting on. There are five kind of alter statements which are fairly self explanatory; for all but <code>RenameTable</code> the first argument to the constructor is the name of the column.</p>
+<p>Slightly more interestingly is <code>CreateStatement</code>. This illustrates what I was talking about before with storing many columns as a map of the column’s name to the column’s type and contraints.</p>
+<h2 id="parsing-sql-statements">Parsing SQL Statements</h2>
+<p>To parse the SQL I will be using the <a href="http://hackage.haskell.org/package/attoparsec">Attoparsec</a> library. Another option would have been to use Parsec which may have given better error reporting as Attoparsec is aimed at efficiency. The libraries are quite similar though so it would be quite easy to change this code to use Parsec.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+<span class="kw">module</span> <span class="dt">Parser</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Prelude</span> <span class="kw">hiding</span> (takeWhile)
+<span class="kw">import </span><span class="dt">Data.Attoparsec.Text</span>
+<span class="kw">import </span><span class="dt">Control.Applicative</span>
+<span class="kw">import </span><span class="dt">Types</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></code></pre>
+<p>As usual first we have the imports. <code>OverloadedStrings</code> allows us to write Strings in the normal format:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="st">&quot;Hello world&quot;</span></code></pre>
+<p>But instead of having to be of type <code>String</code> they could be of type <code>Text</code> or <code>ByteString</code>. This is sort of like if you write a number in Haskell it could be one of many types.</p>
+<p>Note that <code>takeWhile</code> from Prelude is hidden as that name is also used by Attoparsec. We use the <code>Text</code> version of Attoparsec so we can parse <code>Text</code>.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseTypeChar ::</span> <span class="dt">Parser</span> <span class="dt">Type</span>
+parseTypeChar <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;CHAR&quot;</span>
+  skipSpace
+  char <span class="ch">'('</span>
+  skipSpace
+  n <span class="ot">&lt;-</span> many1 digit
+  skipSpace
+  char <span class="ch">')'</span>
+  return <span class="fu">$</span> <span class="dt">CChar</span> (read n)</code></pre>
+<p>The first thing to note is that all of the parser functions that will be shown here have the type <code>Parser a</code>, in this case <code>Parser Type</code>. The <code>Parser</code> type is provided by Attoparsec and allows us to parse <code>Text</code>, stopping if there is an error in parsing. Basically this type looks after all the error handling and other bits and pieces for us. We just have to say what we want to parse.</p>
+<p>It may help to know what <code>parseTypeChar</code> is trying to match. It will try to parse a string in the form <code>CHAR(20)</code>. <code>parseTypeChar</code> starts by matching <code>&quot;CHAR&quot;</code> case-insensitively. It then matches an opening bracket with space either side. <code>many1 digit</code> matches 1 or more digits and returns them as a list which we call <code>n</code>. In this case <code>digit</code> is a parser which matches a numeric character and returns it but <code>many1</code> works with any parser you give it, for example we could do:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">string ::</span> <span class="dt">Parser</span> <span class="dt">String</span>
+
+many1 (string <span class="st">&quot;hi&quot;</span>)<span class="ot"> ::</span> <span class="dt">Parser</span> [<span class="dt">String</span>]</code></pre>
+<p>The function then matches a closing bracket, turns <code>n</code> into a number and returns it in a <code>CChar</code>. The <code>read</code> is neccessary because <code>digit</code> returns the digit as a <code>Char</code> and <code>many1</code> gives us back a list. In effect <code>n</code> is actually a <code>String</code> so we must use <code>read</code> to make it into an <code>Int</code>.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseType ::</span> <span class="dt">Parser</span> <span class="dt">Type</span>
+parseType <span class="fu">=</span> (asciiCI <span class="st">&quot;INT&quot;</span> <span class="fu">*&gt;</span> pure <span class="dt">CInt</span>) <span class="fu">&lt;|&gt;</span> parseTypeChar</code></pre>
+<p><code>parseType</code> shows parsing through the applicative interface. The <code>&lt;|&gt;</code> operator will attempt whatever is on it’s left side and, if that fails, will try whatever is on it’s right side. So in this case we are trying to either parse an int type or a char type. Parsing the int type is a further use of applicative - it uses <code>*&gt;</code> which evaluate it’s left argument and then evaluates it’s right argument and returns the right. This can be a very useful tool when parsing because it allows you to do things like this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">char <span class="ch">'('</span> <span class="fu">*&gt;</span> many1 digit <span class="fu">&lt;*</span> char <span class="ch">')'</span></code></pre>
+<p>In this case it will match a pair of opening and closing brackets with digits in between, just like <code>parseTypeChar</code>. There’s no difference in functionality but it is a lot shorter. In addition note how the left part of <code>parseType</code> ends with a <code>pure</code>. <code>pure</code> is the applicative version of <code>return</code>. Because <code>*&gt;</code> works on <code>Parser</code>s we have to put any normal value we want into <code>Parser</code>. This is what <code>pure</code>/<code>return</code> do.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseConstraint ::</span> <span class="dt">Parser</span> <span class="dt">Constraint</span>
+parseConstraint <span class="fu">=</span> (asciiCI <span class="st">&quot;NOT&quot;</span> <span class="fu">*&gt;</span> skipSpace <span class="fu">*&gt;</span> asciiCI <span class="st">&quot;NULL&quot;</span> <span class="fu">*&gt;</span> pure <span class="dt">NotNull</span>) <span class="fu">&lt;|&gt;</span>
+                  (asciiCI <span class="st">&quot;PRIMARY&quot;</span> <span class="fu">*&gt;</span> skipSpace <span class="fu">*&gt;</span> asciiCI <span class="st">&quot;KEY&quot;</span> <span class="fu">*&gt;</span> pure <span class="dt">PrimaryKey</span>)
+
+<span class="ot">parseConstraints ::</span> <span class="dt">Parser</span> [<span class="dt">Constraint</span>]
+parseConstraints <span class="fu">=</span> many1 (parseConstraint <span class="fu">&lt;*</span> skipSpace)</code></pre>
+<p>The constraints parser is quite similar. Perhaps note the fact that <code>*&gt;</code> can be changed together easily and the use of <code>many1</code> again.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseName ::</span> <span class="dt">Parser</span> <span class="dt">T.Text</span>
+parseName <span class="fu">=</span> takeWhile1 (<span class="ot">`notElem`</span> <span class="st">&quot;; &quot;</span>)
+
+<span class="ot">parseColumn ::</span> <span class="dt">Parser</span> (<span class="dt">T.Text</span>, <span class="dt">Column</span>)
+parseColumn <span class="fu">=</span> <span class="kw">do</span>
+  name <span class="ot">&lt;-</span> parseName
+  skipSpace
+  t <span class="ot">&lt;-</span> parseType
+  skipSpace
+  constraints <span class="ot">&lt;-</span> parseConstraints <span class="fu">&lt;|&gt;</span> pure []
+  return (name, <span class="dt">Column</span> t constraints)
+
+<span class="ot">parseCreate ::</span> <span class="dt">Parser</span> <span class="dt">Statement</span>
+parseCreate <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;CREATE TABLE&quot;</span>
+  skipSpace
+  name <span class="ot">&lt;-</span> parseName
+  skipSpace
+  char <span class="ch">'('</span>
+  cols <span class="ot">&lt;-</span> sepBy (skipSpace <span class="fu">*&gt;</span> parseColumn <span class="fu">&lt;*</span> skipSpace) (char <span class="ch">','</span>) 
+  skipSpace
+  char <span class="ch">')'</span>
+  skipSpace
+  char <span class="ch">';'</span> <span class="fu">&lt;|&gt;</span> pure <span class="ch">' '</span>
+  return <span class="fu">$</span> <span class="dt">Create</span> name (<span class="dt">CreateTable</span> (M.fromList cols))</code></pre>
+<p>Ah. Now we get to the more interesting bit! First we have <code>parseName</code> which is used for any name in a statement. In this case we just take any characters which aren’t a space or a semicolon as either of those would end the name. <code>parseColumn</code> is pretty standard - we just grab a name, some spaces and a type. We then try to get some constraints. However, not all columns will have constraints. Once again we use <code>&lt;|&gt;</code> to allow for this. If <code>parseCostraints</code> fails then we’ll just give back an empty list.</p>
+<p>Finally we have a parser for a full statement! <code>parseCreate</code> is pretty straight forward, except for when we grab the columns. Here we use the <code>sepBy</code> parser which matches it’s first argument and then it’s second, repeatedly. In this case we want to have many columns each separated by a comma. In the last line of the function we call <code>M.fromList</code>. Because parsing a column returns the name of the column and the column itself wrapped in a tuple, and because we get many columns, we can turn this into a <code>Map</code>. This will make doing things like grabbing the column named “id” very easy and also efficient.</p>
+<p>Statements do not have to end with a semicolon, depending on the database used, hence the use of <code>&lt;|&gt;</code> like in parseColumn. You may be wondering why we used <code>pure ' '</code> and not something like <code>pure ()</code>. Although it wouldn’t matter that much to us if we used the <code>()</code> version (as we’re only going to throw it away anyway), <code>&lt;|&gt;</code> requires it’s arguments to have the same type. As <code>char</code> has type <code>Parser Char</code> we must have the same type on the other side.</p>
+<p>Let’s test it out in ghci:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="fu">:</span>l Parser.hs 
+<span class="fu">...</span>
+ghci<span class="fu">&gt;</span> <span class="fu">:</span>set <span class="fu">-</span><span class="dt">XOverloadedStrings</span>
+ghci<span class="fu">&gt;</span> parseOnly parseCreate <span class="st">&quot;CREATE TABLE atbl (id INT PRIMARY KEY NOT NULL);&quot;</span>
+<span class="dt">Right</span> (<span class="dt">Create</span> <span class="st">&quot;atbl&quot;</span> (<span class="dt">CreateTable</span> {_cols <span class="fu">=</span> fromList [(<span class="st">&quot;id&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CInt</span>, _constraints <span class="fu">=</span> [<span class="dt">PrimaryKey</span>,<span class="dt">NotNull</span>]})]}))
+ghci<span class="fu">&gt;</span> parseOnly parseCreate <span class="st">&quot;CREATE TABLE atbl (id INT PRIMARY KEY NOT NULL, name CHAR(20));&quot;</span>
+<span class="dt">Right</span> (<span class="dt">Create</span> <span class="st">&quot;atbl&quot;</span> (<span class="dt">CreateTable</span> {_cols <span class="fu">=</span> fromList [(<span class="st">&quot;id&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CInt</span>, _constraints <span class="fu">=</span> [<span class="dt">PrimaryKey</span>,<span class="dt">NotNull</span>]}),(<span class="st">&quot;name&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CChar</span> <span class="dv">20</span>, _constraints <span class="fu">=</span> []})]}))</code></pre>
+<p>Fantastic, it works! The only complicated bit was enabling <code>OverloadedStrings</code>. As you can see the result is wrapped in a <code>Right</code>. This is one of the constructors of the <code>Either</code> type which is used to handle parse errors. <code>parseOnly</code> has type <code>Parser a -&gt; Text -&gt; Either String a</code> so if the parser succeeds the value it parsed is returned in a <code>Right</code>. If it fails then the error message is wrapped in a <code>Left</code>. We can then use a case statement or pattern match on this value and handle the error.</p>
+<p>Now we just have to parse the alter statements and the parser is done. Luckily it is not too complicated and, hopefully, you’ll be able to understand it without any help from me. Let’s deal with the parsing of the different types of alter statements first, eg. <code>RENAME TO</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- parses statements like:</span>
+<span class="co">-- RENAME TO name</span>
+<span class="ot">parseRenameTable ::</span> <span class="dt">Parser</span> <span class="dt">AlterStatement</span>
+parseRenameTable <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;RENAME TO&quot;</span>
+  skipSpace
+  name <span class="ot">&lt;-</span> parseName
+  return <span class="fu">$</span> <span class="dt">RenameTable</span> name
+
+<span class="co">-- RENAME colName TO newColName</span>
+<span class="ot">parseRenameColumn ::</span> <span class="dt">Parser</span> <span class="dt">AlterStatement</span>
+parseRenameColumn <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;RENAME&quot;</span>
+  skipSpace
+  oldName <span class="ot">&lt;-</span> parseName
+  skipSpace
+  asciiCI <span class="st">&quot;TO&quot;</span>
+  skipSpace
+  newName <span class="ot">&lt;-</span> parseName
+  return <span class="fu">$</span> <span class="dt">RenameColumn</span> oldName newName
+
+<span class="co">-- ADD col INT NOT NULL</span>
+<span class="ot">parseAddColumn ::</span> <span class="dt">Parser</span> <span class="dt">AlterStatement</span>
+parseAddColumn <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;ADD&quot;</span>
+  skipSpace
+  (name, column) <span class="ot">&lt;-</span> parseColumn
+  return <span class="fu">$</span> <span class="dt">AddColumn</span> name column
+
+<span class="co">-- DROP col</span>
+<span class="ot">parseDropColumn ::</span> <span class="dt">Parser</span> <span class="dt">AlterStatement</span>
+parseDropColumn <span class="fu">=</span> <span class="kw">do</span>
+  asciiCI <span class="st">&quot;DROP&quot;</span>
+  skipSpace
+  name <span class="ot">&lt;-</span> parseName
+  return <span class="fu">$</span> <span class="dt">DropColumn</span> name
+
+<span class="co">-- col INT</span>
+<span class="ot">parseChangeColumnType ::</span> <span class="dt">Parser</span> <span class="dt">AlterStatement</span>
+parseChangeColumnType <span class="fu">=</span> <span class="kw">do</span>
+  name <span class="ot">&lt;-</span> parseName
+  skipSpace
+  typ <span class="ot">&lt;-</span> parseType
+  return <span class="fu">$</span> <span class="dt">ChangeColumnType</span> name typ</code></pre>
+<p>And now the last pieces of the puzzle - parsing an alter statement and a helper function to change text into a <code>Statement</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseAlter ::</span> <span class="dt">Parser</span> <span class="dt">Statement</span>
+parseAlter <span class="fu">=</span>  <span class="kw">do</span>
+  asciiCI <span class="st">&quot;ALTER TABLE&quot;</span>
+  skipSpace
+  name <span class="ot">&lt;-</span> parseName
+  skipSpace
+  alter <span class="ot">&lt;-</span> parseRenameTable <span class="fu">&lt;|&gt;</span> parseRenameColumn <span class="fu">&lt;|&gt;</span> parseAddColumn <span class="fu">&lt;|&gt;</span> parseDropColumn <span class="fu">&lt;|&gt;</span> parseChangeColumnType
+  skipSpace
+  char <span class="ch">';'</span> <span class="fu">&lt;|&gt;</span> pure <span class="ch">' '</span>
+  return <span class="fu">$</span> <span class="dt">Alter</span> name alter
+
+<span class="ot">parseStatement ::</span> <span class="dt">T.Text</span> <span class="ot">-&gt;</span> <span class="dt">Statement</span>
+parseStatement xs <span class="fu">=</span> q
+  <span class="kw">where</span> (<span class="dt">Right</span> q) <span class="fu">=</span> parseOnly (parseCreate <span class="fu">&lt;|&gt;</span> parseAlter) xs</code></pre>
+<p><code>parseAlter</code> should look fairly simple to you now. <code>parseStatement</code> is rather naughty and not good Haskell style. We use <code>parseOnly</code> like in the interactive ghci sessions but we grab the <code>Statement</code> value out of it by pattern matching. But what if the parser fails and we get a <code>Left</code>? Well the program will crash - not good. Happily one of the benefits of writing a blog post is that you can only include statements that will work so I can probably get away with matching the <code>Right</code>!</p>
+<h2 id="merging">Merging</h2>
+<h3 id="state">State</h3>
+<p>Now the good bit. That parsing was a bit of a slog but now we can actually have a go at merging statements into one. The approach I shall use is to have a <code>Map</code> of table names to <code>CrateStatement</code>s. The advantages of using <code>CreateStatement</code> is two-fold:</p>
+<ol style="list-style-type: decimal">
+<li>It allows us to store and edit all the table data - column names, types, constraints. You can think of <code>CreateStatement</code> as just a representation of a <code>Table</code>.</li>
+<li>We can easily create a <code>Statement</code> out of it which we will return when we’ve merged all the migrations.</li>
+</ol>
+<p>Hang on a second. “store and edit”. It sounds like we needs some mutable state and so we’re going to store this using the State monad. It provides us with three functions:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- State s a where s is the state held and a is the return type</span>
+<span class="ot">get ::</span> <span class="dt">State</span> s s
+<span class="ot">put ::</span> s <span class="ot">-&gt;</span> <span class="dt">State</span> s ()
+<span class="ot">modify ::</span> (s <span class="ot">-&gt;</span> s) <span class="ot">-&gt;</span> <span class="dt">State</span> s ()</code></pre>
+<p>This is exactly the kind of thing we need. The problem is that modifying values can be a bit clunky. For example:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Given the state M.fromList [('a', M.fromList [('1', 10)]), ('b', M.empty)]</span>
+<span class="ot">change ::</span> <span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Int</span>)) () 
+change <span class="fu">=</span> <span class="kw">do</span>
+    m <span class="ot">&lt;-</span> get
+    <span class="kw">let</span> (<span class="dt">Just</span> a) <span class="fu">=</span> M.lookup <span class="ch">'a'</span>
+    <span class="co">-- inserting a value that already exists changed the associated value with the value given</span>
+    modify (M.insert <span class="ch">'a'</span> (M.insert <span class="ch">'1'</span> <span class="dv">100</span> a))</code></pre>
+<p>As you can see when we have any kind of nesting then it gets a bit messy. Seeing as we will be storing data of the type <code>M.Map T.Text CreateStatement</code>, where <code>CreateStatement</code> has extra data, we’re going to need a nicer way to do this. We shall do this with lenses.</p>
+<h3 id="lenses">Lenses</h3>
+<p>The <a href="https://hackage.haskell.org/package/lens">lens library</a>, written by Edward Kmett, provides a nice way to get and set values no matter how deeply nested they are. Lens can be quite difficult to use for beginners and I have to confess I am not exactly an expert in them myself. I do know just enough to accomplish what we are doing today though.</p>
+<p>Let’s quickly run through how to use lens. We’ll create a data type for a description and a point:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Description</span> <span class="fu">=</span> <span class="dt">Description</span> { _<span class="ot">terrainType ::</span> <span class="dt">String</span>
+                               , _<span class="ot">town ::</span> <span class="dt">String</span>}
+makeLenses <span class="ch">''</span><span class="dt">Description</span>
+
+<span class="kw">data</span> <span class="dt">Point</span> <span class="fu">=</span> <span class="dt">Point</span> { _<span class="ot">x ::</span> <span class="dt">Int</span>
+                   , _<span class="ot">y ::</span> <span class="dt">Int</span>
+                   , _<span class="ot">z ::</span> <span class="dt">Int</span>
+                   , _<span class="ot">description ::</span> <span class="dt">Description</span>
+                   }
+makeLenses <span class="ch">''</span><span class="dt">Point</span></code></pre>
+<p>The function <code>makeLenses</code> automatically generates lenses for the data type given, so each accessor (<code>_x</code>, <code>_description</code> etc) will get a lens (<code>x</code>, <code>description</code> etc). We used this when declaring <code>Column</code> and <code>Statement</code> earlier. One way to think of lenses is as a path to data - a reference. <code>x</code> is a reference from a <code>Point</code> to an <code>Int</code>. The type signature for lenses almost reads like the explanation:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">x ::</span> <span class="dt">Lens'</span>            <span class="dt">Point</span>        <span class="dt">Int</span>
+<span class="co">--    ^                 ^           ^</span>
+<span class="co">-- this is a lens   from a Point  to an Int</span></code></pre>
+<p>We can now use them like so:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="kw">let</span> p <span class="fu">=</span> <span class="dt">Point</span> <span class="dv">10</span> <span class="dv">10</span> <span class="dv">10</span> (<span class="dt">Description</span> <span class="st">&quot;Sandy&quot;</span> <span class="st">&quot;Eastbourne&quot;</span>)
+ghci<span class="fu">&gt;</span> view x p
+<span class="dv">10</span>
+ghci<span class="fu">&gt;</span> view (description <span class="fu">.</span> terrainType) p
+<span class="st">&quot;Sandy&quot;</span>
+ghci<span class="fu">&gt;</span> p <span class="fu">^.</span> description <span class="fu">.</span> terrain
+<span class="st">&quot;Sandy&quot;</span></code></pre>
+<p><code>view</code> is a function which gives back the value pointed to by the lens (given as the first argument) in the second argument. Notice how we can compose lenses with <code>.</code> - function composition. It even reads like an OOP accessor would. Having to wrap the lens in brackets is a bit tiresome though, so there is a nice operator defined (<code>^.</code>) which is just <code>view</code> renamed.</p>
+<p>We can also set values:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> set x <span class="dv">0</span> p
+<span class="dt">Point</span> <span class="dv">0</span> <span class="dv">10</span> <span class="dv">10</span> (<span class="dt">Description</span> <span class="st">&quot;Sandy&quot;</span> <span class="st">&quot;Eastbourne&quot;</span>)
+ghci<span class="fu">&gt;</span> set (description <span class="fu">.</span> terrainType) <span class="st">&quot;Muddy&quot;</span> p
+<span class="dt">Point</span> <span class="dv">10</span> <span class="dv">10</span> <span class="dv">10</span> (<span class="dt">Description</span> <span class="st">&quot;Muddy&quot;</span> <span class="st">&quot;Eastbourne&quot;</span>)</code></pre>
+<p>You may be wondering why this is of use to us. Sure, it’s nice that we can get and set the data so easily but we’re still going to have to get it and put it from the <code>State</code> monad, right? Luckily we don’t need to! Let’s rewrite that nested <code>Map</code> example:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Given the state M.fromList [('a', M.fromList [('1', 10)]), ('b', M.empty)]</span>
+<span class="ot">change ::</span> <span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> <span class="dt">Int</span>)) () 
+change <span class="fu">=</span> at <span class="ch">'a'</span> <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> at <span class="ch">'1'</span> <span class="fu">.=</span> <span class="dt">Just</span> <span class="dv">100</span></code></pre>
+<p>Wow, that’s a lot less code! It’s pretty dense though. Let’s break it into chunks.</p>
+<ul>
+<li><code>.=</code> is like <code>set</code> only it works on the state in the <code>State</code> monad. Because it’s working on the state we don’t need to pass it the data structure we want to change</li>
+<li><code>at 'a'</code>. The lens <code>at</code> accesses the value in containers like <code>Map</code>. Here we get the value associated with <code>'a'</code>. The problem with <code>Map</code> structures is that no value may exist for that key. For this reason <code>at</code> returns the value associated with the key given wrapped in a <code>Maybe</code>.</li>
+<li><code>_Just . at '1'</code>. Before we can access the <code>Map</code> within the <code>Map</code> we have to unwrap it from it’s <code>Maybe</code> coating. This is the reason for the <code>_Just</code>. We can then access the value at the key <code>'1'</code>.</li>
+<li><code>Just 100</code>. Remember how <code>at</code> wraps the value it points at in a <code>Maybe</code>? Well that means we have to set it to a value which is a <code>Maybe</code>. In this case we use <code>Just 100</code>. But what if we had used <code>Nothing</code>? In that case the key and it’s value is deleted from the <code>Map</code>, if it existed. Nifty!</li>
+</ul>
+<p>Hopefully this has piqued your interest in Lens. I have been purposefully brief as I didn’t want to fall into the trap of writing a lens tutorial; I predict that lens is the new monad! Fortunately there are some great resources out there if. Take a look at <a href="http://www.haskellforall.com/2013/05/program-imperatively-using-haskell.html">Program imperatively using Haskell lenses</a> and <a href="https://www.fpcomplete.com/user/tel/a-little-lens-starter-tutorial">A Little Lens Starter Tutorial</a>.</p>
+<h3 id="merging-statements">Merging statements</h3>
+<p>So to recap we shall have a list of <code>Statement</code>s which will be given to a function. Each of these <code>Statement</code>s will be passed to a function which will update it’s state to reflect the changes the migration asked for.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">module</span> <span class="dt">Sql</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Types</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span>
+<span class="kw">import </span><span class="dt">Control.Lens</span>
+<span class="kw">import </span><span class="dt">Control.Monad.State</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span>
+
+<span class="kw">type</span> <span class="dt">Merger</span> a <span class="fu">=</span> <span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">CreateStatement</span>) a
+
+<span class="ot">mergeMigration ::</span> <span class="dt">Statement</span> <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()
+
+<span class="ot">singleStatementFromMigrations ::</span> [<span class="dt">Statement</span>] <span class="ot">-&gt;</span> [<span class="dt">Statement</span>]
+singleStatementFromMigrations statements <span class="fu">=</span> M.foldWithKey (\tblName cStatement acc <span class="ot">-&gt;</span> <span class="dt">Create</span> tblName cStatement <span class="fu">:</span> acc) [] m
+    <span class="kw">where</span> m <span class="fu">=</span> execState (mapM_ mergeMigration statements) M.empty</code></pre>
+<p>Here’s our entry point. For each statement we apply a function called <code>mergeMigration</code> using <code>mapM_</code>. This is vary similar to the <code>map</code> function for lists only <code>mapM_</code> applies a monadic function, in this case a function with state, to each value in the list and then throws away all the values that were returned. It’s important to note that the state will be retained from the last call, so if the first run of <code>mergeMigration</code> changes the state then this change will still be there on the second run.</p>
+<p>We then use <code>execState</code> to run the stateful action which <code>mapM_</code> gave us with the default state of an empty <code>Map</code> and get back the final state (of type <code>M.Map T.Text CreateStatement</code>). We then fold through the map, building up a list of <code>Statement</code>s from the key of the <code>Map</code> (which is the table name) and the value (which is the <code>CreateStatement</code>). In short we’ll have one create statement for each table that was created and each statement will reflect any changes made with alter statements!</p>
+<p>So let’s have a look at the first few bits of <code>mergeMigration</code> then:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">mergeMigration ::</span> <span class="dt">Statement</span> <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()
+mergeMigration (<span class="dt">Create</span> name ctbl) <span class="fu">=</span> at name <span class="fu">.=</span> <span class="dt">Just</span> ctbl  
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">RenameTable</span> newName)) <span class="fu">=</span> <span class="kw">do</span>
+    tbl <span class="ot">&lt;-</span> use <span class="fu">$</span> at name
+    at name <span class="fu">.=</span> <span class="dt">Nothing</span>
+    at newName <span class="fu">.=</span> tbl</code></pre>
+<p>The first, and easiest, case is if we get a create statement. In this case we grab the name of the table and the <code>CreateStatement</code> which holds the information about the columns and associate the name with the <code>CreateStatement</code> in the <code>Map</code>. Remember we store the <code>CreateStatement</code> so we can build a <code>Statement</code> easily and because it already has all the data we need.</p>
+<p>The next case is a bit more interesting. If we need to rename a table then we get the data we currently have on that table using the <code>use</code> function. You can think of <code>use</code> as <code>view</code> but in the state monad. We then remove the table from the <code>Map</code> by using <code>at</code> and setting it’s value to <code>Nothing</code> as seen before. Finally we reinsert the table at the key <code>newName</code>.</p>
+<p>Both of these cases and all of the cases I shall show could have quite easily been written without <code>State</code>. The second one would look a little like this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">mergeMigration (<span class="dt">Alter</span> name (<span class="dt">RenameTable</span> newName)) m <span class="fu">=</span> m''
+    <span class="kw">where</span> tbl <span class="fu">=</span> m <span class="fu">^.</span> at name
+          m'  <span class="fu">=</span> set (at name) <span class="dt">Nothing</span> m 
+          m'' <span class="fu">=</span> set (at newName) tbl m'</code></pre>
+<p>The state version looks easier to read to me but the advantage is minimal elsewhere. At any rate, we’ve saved ourselves some typing and what is more important that that? Certainly not readability.</p>
+<p>We’ve now got something that we can test, so fire up ghci:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="fu">:</span>set <span class="fu">-</span><span class="dt">XOverloadedStrings</span>
+ghci<span class="fu">&gt;</span> <span class="kw">import </span><span class="dt">Parser</span>
+ghci<span class="fu">&gt;</span> <span class="kw">import </span><span class="dt">Sql</span>
+ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;CREATE TABLE tbl (col1 INT);&quot;</span>, <span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
+ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
+[<span class="dt">Create</span> <span class="st">&quot;tbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
+<p>Magic! I’m available to book for birthday parties. :D</p>
+<h3 id="error-handling">Error handling</h3>
+<p>So it works for correct input. But what about for incorrect input, for example altering a table that does not exist? In that case the magic runs out a bit:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
+ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
+[]</code></pre>
+<p>Uh-oh. Returning an empty list isn’t too bad but really we should be returning an error of some kind here. Altering a table that doesn’t exist is not good behaviour and failing quietly is generally a bad idea. Let’s fix this!</p>
+<p>In Haskell there are two basic ways to handle errors. The first is the <code>Maybe</code> type which we have already seen. A value can either be <code>Just a</code> indicating, a successful result of <code>a</code>, or <code>Nothing</code>, idicating a unsuccessful result. Although that is a bit better than what we have, it would be nice to be able to give some extra information about the error. This is where the <code>Either</code> type comes in, which has two type paramaters (ie <code>Either a b</code>). Hopefully you remember this from <code>parseOnly</code>. <code>Either</code> has two constructors:</p>
+<ul>
+<li><code>Left a</code>. Conventionally used to signify an unsuccessful result with information <code>a</code></li>
+<li><code>Right b</code>. A successful result of <code>b</code></li>
+</ul>
+<p>I say conventionally because <code>Either</code> can be used for other things as well. There’s one more piece of the puzzle left however. For our error handling to work we could do with stopping at the first error we encounter. Luckily <code>Either</code> can do this as well. Just like <code>Maybe</code> we can use <code>Either</code> as a monad. Consider the following:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">test ::</span> <span class="dt">Either</span> <span class="dt">String</span> <span class="dt">Int</span>
+test <span class="fu">=</span> <span class="kw">do</span>
+  <span class="dt">Right</span> <span class="dv">10</span>
+  <span class="dt">Left</span> <span class="st">&quot;Error&quot;</span>
+  <span class="dt">Right</span> <span class="dv">20</span>
+
+ghci<span class="fu">&gt;</span> test
+<span class="dt">Left</span> <span class="st">&quot;Error&quot;</span></code></pre>
+<p>Excellent! It turns out if we use <code>Either</code> as a monad it will stop and return (although as this is Haskell that may be a misuse of the term ‘return’) the first <code>Left</code> it finds. But how do we use this with the State monad? The more expirienced Haskellers amongst you may already know the answer - monad transformers.</p>
+<p>A monad transformer allows us to make one monad out of multiple other monads and the one monad shares the properties of the ones it was made out of. In our case it will allow us to pass state around and do some error handling. Let’s redefine <code>Merger</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">Merger</span> a <span class="fu">=</span> <span class="dt">StateT</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">CreateStatement</span>) (<span class="dt">Either</span> <span class="dt">String</span>) a
+<span class="co">--                           ^                              ^         ^</span>
+<span class="co">--                          state                      inner monad  return type</span></code></pre>
+<p>As you can tell <code>StateT</code> takes some state, a monad and a return type. You may be wondering why the inner monad is <code>Either String</code> and not just <code>Either</code>. A basic explanation is to create a monad your type must have a space for the return value <code>a</code>. If we just tried using <code>Either</code> then we have two spaces and this wouldn’t work. Admittedly this is a pretty bad explanation - it is only half correct and a little simplistic. Luckily you do not have to understand completely to be able to follow along.</p>
+<p>Let’s rewrite the first couple of cases of mergeMigration:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">mergeMigration ::</span> <span class="dt">Statement</span> <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()
+mergeMigration (<span class="dt">Create</span> name ctbl) <span class="fu">=</span> <span class="kw">do</span>
+    n <span class="ot">&lt;-</span> use <span class="fu">$</span> at name
+    <span class="kw">case</span> n <span class="kw">of</span> 
+        <span class="dt">Just</span> _ <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Table '&quot;</span> <span class="fu">++</span> T.unpack name <span class="fu">++</span> <span class="st">&quot;' already created&quot;</span>)
+        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> at name <span class="fu">.=</span> <span class="dt">Just</span> ctbl  
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">RenameTable</span> newName)) <span class="fu">=</span> <span class="kw">do</span>
+  tbl <span class="ot">&lt;-</span> use <span class="fu">$</span> at name                 
+  <span class="kw">case</span> tbl <span class="kw">of</span>
+    <span class="dt">Just</span> _  <span class="ot">-&gt;</span> <span class="kw">do</span> at name <span class="fu">.=</span> <span class="dt">Nothing</span>
+                  at newName <span class="fu">.=</span> tbl
+    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Table '&quot;</span> <span class="fu">++</span> T.unpack name <span class="fu">++</span> <span class="st">&quot;' does not exist so cannot rename&quot;</span>)</code></pre>
+<p>In the first case we grab the <code>CreateStatement</code> associated with <code>name</code>. Because <code>at</code> will give us back a <code>Maybe</code> when we get data with it we can use a case statement. If there was no <code>name</code> in the <code>Map</code> then we can insert it as normal. If there was a value associated with that key then we create an error message in a <code>Left</code>. We then pass this <code>lift</code>. <code>lift</code> is a special function that lifts functions of the inner monad into the outer one. In this program it will take our <code>Either String a</code> and turn it into <code>StateT (M.Map String CreateStatement) (Either String) a</code>. Now to check if it works:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
+ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
+<span class="dt">Left</span> <span class="st">&quot;Table 'tbl' does not exist so cannot rename&quot;</span>
+ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;CREATE TABLE tbl (col1 INT);&quot;</span>, <span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
+ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
+<span class="dt">Right</span> [<span class="dt">Create</span> <span class="st">&quot;tbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
+<p>Error reporting works and we haven’t messed anything else up.</p>
+<h3 id="last-mergemigration-cases">Last <code>mergeMigration</code> cases</h3>
+<p>We only have four cases left!</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">mergeMigration (<span class="dt">Alter</span> name (<span class="dt">RenameColumn</span> oldCol newCol)) <span class="fu">=</span> <span class="kw">do</span>
+  m <span class="ot">&lt;-</span> get
+  <span class="kw">let</span> col <span class="fu">=</span> m <span class="fu">^?</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at oldCol <span class="fu">.</span> _<span class="dt">Just</span>
+  <span class="kw">case</span> col <span class="kw">of</span>
+    <span class="dt">Just</span> _ <span class="ot">-&gt;</span> <span class="kw">do</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at oldCol <span class="fu">.=</span> <span class="dt">Nothing</span>
+                 at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at newCol <span class="fu">.=</span> col
+    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Column '&quot;</span> <span class="fu">++</span> T.unpack oldCol <span class="fu">++</span> <span class="st">&quot;' does not exist in table '&quot;</span> <span class="fu">++</span> T.unpack name 
+                            <span class="fu">++</span> <span class="st">&quot;' so cannot rename&quot;</span>)
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">AddColumn</span> colName col)) <span class="fu">=</span> <span class="kw">do</span>
+    m <span class="ot">&lt;-</span> get
+    <span class="kw">let</span> c <span class="fu">=</span> m <span class="fu">^?</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.</span> _<span class="dt">Just</span>
+    <span class="kw">case</span> c <span class="kw">of</span>
+        <span class="dt">Just</span> _ <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Column '&quot;</span> <span class="fu">++</span> T.unpack colName <span class="fu">++</span> <span class="st">&quot;' already exists in table '&quot;</span> <span class="fu">++</span> T.unpack name 
+                               <span class="fu">++</span> <span class="st">&quot;' so cannot add&quot;</span>)
+        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.=</span> <span class="dt">Just</span> col
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">DropColumn</span> colName)) <span class="fu">=</span> <span class="kw">do</span>
+    m <span class="ot">&lt;-</span> get
+    <span class="kw">let</span> c <span class="fu">=</span> m <span class="fu">^?</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.</span> _<span class="dt">Just</span>
+    <span class="kw">case</span> c <span class="kw">of</span> 
+        <span class="dt">Just</span> _ <span class="ot">-&gt;</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.=</span> <span class="dt">Nothing</span>
+        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Column '&quot;</span> <span class="fu">++</span> T.unpack colName <span class="fu">++</span> <span class="st">&quot;' does not exist in table '&quot;</span> <span class="fu">++</span> T.unpack name 
+                                <span class="fu">++</span> <span class="st">&quot;' so cannot drop&quot;</span>)
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">ChangeColumnType</span> colName t)) <span class="fu">=</span> <span class="kw">do</span>
+    m <span class="ot">&lt;-</span> get
+    <span class="kw">let</span> c <span class="fu">=</span> m <span class="fu">^?</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.</span> _<span class="dt">Just</span>
+    <span class="kw">case</span> c <span class="kw">of</span> 
+        <span class="dt">Just</span> _ <span class="ot">-&gt;</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at colName <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> typ <span class="fu">.=</span> t
+        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Column '&quot;</span> <span class="fu">++</span> T.unpack colName <span class="fu">++</span> <span class="st">&quot;' does not exist in table '&quot;</span> <span class="fu">++</span> T.unpack name 
+                                <span class="fu">++</span> <span class="st">&quot;' so cannot change type&quot;</span>)</code></pre>
+<p>What’s this weird <code>^?</code> thing? It looks similar to <code>^.</code> and it does actually do something very similar. It turns out <code>_Just</code> can have 0 or 1 targets which is a subset of having 0 or more targets. In lens the former is called a <code>Prism</code> and the latter a <code>Traversal</code>. If we used <code>^.</code> then we would have to combine all the results in some way. Lens does this with monoid. Unfortunately it doesn’t really make sense to have a monoid instance for any of our types and because we’re actually using a prism we only care about one result. <code>^?</code> grabs the first result only and puts it in a <code>Maybe</code>. There is also <code>^..</code> which would give you all the results in a list. This is kind of where my knowledge of lens runs out but there are much better explanations of lens at the links listed previously and some good information on prisms and traversals in <a href="https://www.fpcomplete.com/user/tel/lens-aeson-traversals-prisms">this tutorial about lenses and Data.Aeson - a JSON library</a>.</p>
+<p>Let’s make sure all of this works:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmntTexts <span class="fu">=</span> [ <span class="st">&quot;CREATE TABLE tbl (col1 INT NOT NULL, col2 CHAR(20))&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE atbl RENAME col1 TO first_col;&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE atbl first_col CHAR(15)&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE atbl ADD col3 INT;&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE atbl ADD tmp INT;&quot;</span>
+                       , <span class="st">&quot;ALTER TABLE atbl DROP tmp;&quot;</span>]
+ghci<span class="fu">&gt;</span> print <span class="fu">$</span> singleStatementFromMigrations stmnts
+<span class="dt">Right</span> [<span class="dt">Create</span> <span class="st">&quot;atbl&quot;</span> (<span class="dt">CreateTable</span> {_cols <span class="fu">=</span> fromList [(<span class="st">&quot;col2&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CChar</span> <span class="dv">20</span>, _constraints <span class="fu">=</span> []}),(<span class="st">&quot;col3&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CInt</span>, _constraints <span class="fu">=</span> []}),(<span class="st">&quot;first_col&quot;</span>,<span class="dt">Column</span> {_typ <span class="fu">=</span> <span class="dt">CChar</span> <span class="dv">15</span>, _constraints <span class="fu">=</span> [<span class="dt">NotNull</span>]})]})]</code></pre>
+<p>Great, it works! Pretty printing the statements is left as an exercise to the reader - I’ve already rambled on enough!</p>
+<p>And that’s it. The code is a bit more repetative then I would like, I considered adding a function that would remove all the <code>case</code> statements:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">maybeM ::</span> (a <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()) <span class="ot">-&gt;</span> <span class="dt">Merger</span> () <span class="ot">-&gt;</span> <span class="dt">Merger</span> (<span class="dt">Maybe</span> a) <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()
+maybeM success failure mMaybe <span class="fu">=</span> <span class="kw">do</span>
+    m <span class="ot">&lt;-</span> mMaybe
+    maybe failure success m</code></pre>
+<p>The first argument is a function which is run if the maybe returned a <code>Just</code> value. The second argument is the action to run if it was <code>Nothing</code> and finally there is the maybe. It would have allowed us to write code like this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">mergeMigration ::</span> <span class="dt">Statement</span> <span class="ot">-&gt;</span> <span class="dt">Merger</span> ()
+mergeMigration (<span class="dt">Create</span> name ctbl) <span class="fu">=</span> maybeM err (at name <span class="fu">.=</span> <span class="dt">Just</span> ctbl) (use <span class="fu">$</span> at name)
+    <span class="kw">where</span> err _ <span class="fu">=</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Table '&quot;</span> <span class="fu">++</span> T.unpack name <span class="fu">++</span> <span class="st">&quot;' already created&quot;</span>)
+
+mergeMigration (<span class="dt">Alter</span> name (<span class="dt">RenameColumn</span> oldCol newCol)) <span class="fu">=</span> maybeM f err (get <span class="fu">&gt;&gt;=</span> \m <span class="ot">-&gt;</span> return (m <span class="fu">^?</span> at name <span class="fu">.</span> _<span class="dt">Just</span> 
+                                                                                    <span class="fu">.</span> cols <span class="fu">.</span> at oldCol <span class="fu">.</span> _<span class="dt">Just</span>))
+  <span class="kw">where</span> err   <span class="fu">=</span> lift <span class="fu">$</span> <span class="dt">Left</span> (<span class="st">&quot;Column '&quot;</span> <span class="fu">++</span> T.unpack oldCol <span class="fu">++</span> <span class="st">&quot;' does not exist in table '&quot;</span> 
+                                        <span class="fu">++</span> T.unpack name <span class="fu">++</span> <span class="st">&quot;' so cannot rename&quot;</span>)
+        f col <span class="fu">=</span> <span class="kw">do</span> at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at oldCol <span class="fu">.=</span> <span class="dt">Nothing</span>
+                   at name <span class="fu">.</span> _<span class="dt">Just</span> <span class="fu">.</span> cols <span class="fu">.</span> at newCol <span class="fu">.=</span> <span class="dt">Just</span> col</code></pre>
+<p>The first one is still quite readable I think but the second is a little hairy. Higher order functions can be very useful and make code brief but sometimes readability should triumph over brevity. I’m still on the fence about whether it is an improvement or not. If you’ve got any suggestions, need some help, or just want to rant a bit feel free to contact me <a href="http://twitter.com/hailmattyhall">on twitter</a> or by <script type="text/javascript">
+<!--
+h='&#x71;&#x75;&#x69;&#x63;&#x6b;&#98;&#x65;&#x61;&#x6d;&#46;&#x6d;&#x65;&#46;&#x75;&#x6b;';a='&#64;';n='&#x6d;&#x61;&#116;&#116;&#104;&#x65;&#x77;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'">'+'email'+'<\/'+'a'+'>');
+// -->
+</script><noscript>email (matthew at quickbeam dot me dot uk)</noscript>.</p>
+
+            </div>
+            <footer id="footer" class="row">
+                Site proudly generated by
+                <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+            </footer>
+        </div>
+    </body>
+</html>

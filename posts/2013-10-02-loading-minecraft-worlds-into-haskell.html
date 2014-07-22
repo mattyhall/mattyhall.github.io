@@ -53,18 +53,18 @@
 <p>The <code>level.dat</code> file and various others use a format called the Named Binary Tag or <a href="http://minecraft.gamepedia.com/NBT_Format">NBT</a> as you can see from the link it is a compressed file and then a compound tag which has many child tags. A tag consists of a name and a payload (the data). On disk a tag is an ID, which defines the type of tag it is and therefore the type of data it carries, which is represented by a one byte integer; there is then two bytes for the length of the name; a name which is that many bytes long and then the tags payload. So, for example, to store the name of the world we might create a tag that starts with eight (for the string type), then the integer four, then the string “Name”. The payload would be six (for the length of the string) and then the string “World1”.</p>
 <h2 id="the-data">The data</h2>
 <p>First up is some imports which we’ll be using later:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> <span class="kw">qualified</span> Data.ByteString.Char8 <span class="kw">as</span> BC
-<span class="kw">import</span> <span class="kw">qualified</span> Data.ByteString.Lazy <span class="kw">as</span> BL
-<span class="kw">import</span> <span class="kw">qualified</span> Codec.Compression.Zlib <span class="kw">as</span> ZL
-<span class="kw">import</span> <span class="kw">qualified</span> Codec.Compression.GZip <span class="kw">as</span> GZ
-<span class="kw">import</span> <span class="kw">qualified</span> Data.Map <span class="kw">as</span> M
-<span class="kw">import</span> Data.Attoparsec.Lazy <span class="kw">as</span> AP
-<span class="kw">import</span> Data.Attoparsec.Binary
-<span class="kw">import</span> Data.Word
-<span class="kw">import</span> Control.Monad (void, mapM)
-<span class="kw">import</span> Control.Applicative
-<span class="kw">import</span> Data.List (lookup)
-<span class="kw">import</span> Data.Maybe (fromJust)</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import qualified</span> <span class="dt">Data.ByteString.Char8</span> <span class="kw">as</span> <span class="dt">BC</span>
+<span class="kw">import qualified</span> <span class="dt">Data.ByteString.Lazy</span> <span class="kw">as</span> <span class="dt">BL</span>
+<span class="kw">import qualified</span> <span class="dt">Codec.Compression.Zlib</span> <span class="kw">as</span> <span class="dt">ZL</span>
+<span class="kw">import qualified</span> <span class="dt">Codec.Compression.GZip</span> <span class="kw">as</span> <span class="dt">GZ</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span>
+<span class="kw">import </span><span class="dt">Data.Attoparsec.Lazy</span> <span class="kw">as</span> <span class="dt">AP</span>
+<span class="kw">import </span><span class="dt">Data.Attoparsec.Binary</span>
+<span class="kw">import </span><span class="dt">Data.Word</span>
+<span class="kw">import </span><span class="dt">Control.Monad</span> (void, mapM)
+<span class="kw">import </span><span class="dt">Control.Applicative</span>
+<span class="kw">import </span><span class="dt">Data.List</span> (lookup)
+<span class="kw">import </span><span class="dt">Data.Maybe</span> (fromJust)</code></pre>
 <p>I think the best way to start with something like this is to define what the data will look like, and then move on to parsing it. This makes sure you understand the data and so (should) have better luck parsing. It’s personal preference though, so feel free to completely ignore this advice.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Tag</span> <span class="fu">=</span> <span class="dt">TagByte</span>      <span class="dt">String</span> <span class="dt">Int</span>
          <span class="fu">|</span> <span class="dt">TagShort</span>     <span class="dt">String</span> <span class="dt">Int</span>
