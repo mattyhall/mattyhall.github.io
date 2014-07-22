@@ -341,7 +341,7 @@ ghci<span class="fu">&gt;</span> <span class="kw">import </span><span class="dt"
 ghci<span class="fu">&gt;</span> <span class="kw">import </span><span class="dt">Sql</span>
 ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;CREATE TABLE tbl (col1 INT);&quot;</span>, <span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
 ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
-[<span class="dt">Create</span> <span class="st">&quot;tbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
+[<span class="dt">Create</span> <span class="st">&quot;atbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
 <p>Magic! I’m available to book for birthday parties. :D</p>
 <h3 id="error-handling">Error handling</h3>
 <p>So it works for correct input. But what about for incorrect input, for example altering a table that does not exist? In that case the magic runs out a bit:</p>
@@ -389,7 +389,7 @@ ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
 <span class="dt">Left</span> <span class="st">&quot;Table 'tbl' does not exist so cannot rename&quot;</span>
 ghci<span class="fu">&gt;</span> <span class="kw">let</span> stmts <span class="fu">=</span> map parseStatements [<span class="st">&quot;CREATE TABLE tbl (col1 INT);&quot;</span>, <span class="st">&quot;ALTER TABLE tbl RENAME TO atbl&quot;</span>]
 ghci<span class="fu">&gt;</span> singleStatementFromMigrations stmnts
-<span class="dt">Right</span> [<span class="dt">Create</span> <span class="st">&quot;tbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
+<span class="dt">Right</span> [<span class="dt">Create</span> <span class="st">&quot;atbl&quot;</span> (<span class="dt">CreateTable</span> (M.fromList [(<span class="st">&quot;col1&quot;</span>, <span class="dt">Column</span> <span class="dt">Int</span> [])]))]</code></pre>
 <p>Error reporting works and we haven’t messed anything else up.</p>
 <h3 id="last-mergemigration-cases">Last <code>mergeMigration</code> cases</h3>
 <p>We only have four cases left!</p>
