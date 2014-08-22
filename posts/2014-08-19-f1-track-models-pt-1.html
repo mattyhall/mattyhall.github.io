@@ -260,10 +260,10 @@
 <p>The rest of the parsing code is quite repetitive so I’ll let you <a href="https://github.com/mattyhall/osmxml">browse it</a> at your own leisure. Feel free to contact me if there is something you don’t understand.</p>
 <h2 id="getting-the-points-of-the-track">Getting the points of the track</h2>
 <p>I took a lot more space talking about the parser than I expected so I’ll have to leave converting this data into models (the fun bit!) to another blog post. I feel like leaving all of it to the next post is a bit of a cop out so I’ll quickly show you how to get a list of points from an OSM file.</p>
-<p>Well, I say a list of points from an OSM file. I actually mean a list of lists of points because two consecutive elements in a way element should be joined up. However this is not true of two consecutive elements in a relation as far as I can tell. This isn’t really important right now but will be later.</p>
+<p>Well, I say a list of points from an OSM file. I actually mean a list of lists of points because two consecutive elements in a way element should be joined up. However this is not true of two consecutive elements in a relation as far as I can tell. This isn’t really important right now but will be in later blog posts.</p>
 <p>First you will need to create a project using Cargo, the Rust package manager. If you installed Rust from the website you should also have Cargo installed. Run:</p>
-<pre><code>$ cargo new osmtrack
-$ cd osmtrack</code></pre>
+<pre><code>$ cargo new osmmodels
+$ cd osmmodels</code></pre>
 <p>Then add a dependency to <code>Cargo.toml</code>. This will compile your code with my osm parser:</p>
 <pre><code>[dependencies.osmxml]
 git = &quot;https://github.com/mattyhall/osmxml&quot;</code></pre>
@@ -327,7 +327,7 @@ git = &quot;https://github.com/mattyhall/osmxml&quot;</code></pre>
 <p>There are a few things that are worth mentioning here. As <code>Some(e@&amp;Node{..})</code> shows we can match against references with <code>&amp;</code> and if you have <code>name@pat</code> then <code>name</code> will be bound to the match of <code>pat</code>. Finally notice how we have to check that the element we’ve been passed is the right one in <code>expand_node</code> even though we know it is because we checked in <code>expand_way</code>. This is why I think that <code>OsmElement</code> should store named structs so you could just pass the struct.</p>
 <p>If you run this with <a href="https://github.com/mattyhall/osmxml/blob/master/spa.osm">spa.osm</a> in the current directory:</p>
 <pre><code>$ cargo build
-$ ./target/osmtrack</code></pre>
+$ ./target/osmmodels</code></pre>
 <p>You should get latitudes and longitudes flooding your screen. Yay!</p>
 <p>Join me next time when we actually turn all this into models. If you have comments please feel free to <script type="text/javascript">
 <!--

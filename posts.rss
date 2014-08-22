@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Matthew Hall's blog</title>
+        <link>http://mattyhall.github.io</link>
+        <description><![CDATA[Feed for Matthew Hall's blog]]></description>
+        <atom:link href="http://mattyhall.github.io/posts.rss" rel="self"
+                   type="application/rss+xml" />
+        <lastBuildDate>Tue, 19 Aug 2014 00:00:00 UT</lastBuildDate>
+        <item>
+    <title>Creating models of F1 tracks in Rust - Part 1</title>
+    <link>http://mattyhall.github.io/posts/2014-08-19-f1-track-models-pt-1.html</link>
+    <description><![CDATA[We start off by loading an open street map xml file into Rust]]></description>
+    <pubDate>Tue, 19 Aug 2014 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2014-08-19-f1-track-models-pt-1.html</guid>
+</item>
+<item>
+    <title>Merging multiple migrations into one statement</title>
+    <link>http://mattyhall.github.io/posts/2014-07-22-merging-migrations.html</link>
+    <description><![CDATA[Merge multiple migrations into one statement using the Lens library in Haskell]]></description>
+    <pubDate>Tue, 22 Jul 2014 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2014-07-22-merging-migrations.html</guid>
+</item>
+<item>
+    <title>Young Rewired State 2013 - An Analysis</title>
+    <link>http://mattyhall.github.io/posts/2013-11-11-yrs-2013-analysis.html</link>
+    <description><![CDATA[Using Python to look at YRS2013 projects]]></description>
+    <pubDate>Mon, 11 Nov 2013 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2013-11-11-yrs-2013-analysis.html</guid>
+</item>
+<item>
+    <title>Loading Minecraft worlds into Haskell - NBT</title>
+    <link>http://mattyhall.github.io/posts/2013-10-02-loading-minecraft-worlds-into-haskell.html</link>
+    <description><![CDATA[Parsing the NBT file type used in Minecraft]]></description>
+    <pubDate>Wed, 02 Oct 2013 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2013-10-02-loading-minecraft-worlds-into-haskell.html</guid>
+</item>
+<item>
+    <title>Breaking ciphers in haskell</title>
+    <link>http://mattyhall.github.io/posts/2013-03-16-breaking-ciphers-in-haskell.html</link>
+    <description><![CDATA[Breaking a simple cipher by looking at the patterns of words]]></description>
+    <pubDate>Sat, 16 Mar 2013 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2013-03-16-breaking-ciphers-in-haskell.html</guid>
+</item>
+
+    </channel> 
+</rss>
