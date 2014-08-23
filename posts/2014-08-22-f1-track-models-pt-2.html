@@ -63,7 +63,7 @@
 }</code></pre>
 <p>We pass a slice of points in. Passing slices as arguments is nice because literals (like <code>&amp;[1, 2, 3]</code> and <code>&quot;foo&quot;</code>) are slices and other types that could be used (like <code>Vec</code> or <code>String</code>) can easily be turned into a slice by using <code>as_slice</code>, as you can see later on in the function with <code>api</code>.</p>
 <p>We try to get the environment variable “GAPI”. <code>getenv</code> returns an <code>Option</code>. We use the <code>expect</code> function on it which is like <code>unwrap</code> except that if there is no value to unwrap it will fail with the error message you provided.</p>
-<p>Then <code>chuncks</code> is called on the slice. <code>chunks(100)</code> creates an iterator which gives slices of length 100 from the slice it was called on. We then pass it to <code>get_heights_request</code>.</p>
+<p>Then <code>chunks</code> is called on the slice. <code>chunks(100)</code> creates an iterator which gives slices of length 100 from the slice it was called on. We then pass it to <code>get_heights_request</code>.</p>
 <p>So how do we do a web request it Rust? Well, as I write this, there is only one nice way to do it and that is with a library called <a href="https://github.com/chris-morgan/rust-http">rust-http</a>. This library is going to be replaced in the future but whilst the new library is being written rust-http is still maintained.</p>
 <p>Let’s add a couple of dependencies to Cargo.toml:</p>
 <pre><code>[dependencies.url]
