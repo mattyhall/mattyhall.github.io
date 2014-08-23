@@ -157,7 +157,7 @@ v 10 15 10</code></pre>
     }
 }</code></pre>
 <p>Everything else is pretty straight forward. To turn a <code>Wavefront</code> struct into a string we just need to turn each <code>WavefrontValue</code> into a string and separate them by newlines. We supply two methods to make adding values a bit easier.</p>
-<p>Before we can use it we need to add the following lines to the top of <code>src/main,rs</code>:</p>
+<p>Before we can use it we need to add the following lines to the top of <code>src/main.rs</code>:</p>
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">extern</span> crate osmmodels;
 
 <span class="kw">use</span> osmmodels::Wavefront;</code></pre>
