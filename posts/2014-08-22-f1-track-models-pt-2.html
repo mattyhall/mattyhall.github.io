@@ -53,17 +53,17 @@
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="co">// top of src/main.rs</span>
 <span class="kw">use</span> std::os;
 
-<span class="kw">fn</span> get_heights(latlngs: &amp;Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt;) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
+<span class="kw">fn</span> get_heights(latlngs: &amp;[(<span class="kw">f64</span>, <span class="kw">f64</span>)]) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
     <span class="kw">let</span> api: String = os::getenv(<span class="st">&quot;GAPI&quot;</span>).expect(<span class="st">&quot;Please set GAPI&quot;</span>);
     <span class="kw">let</span> <span class="kw">mut</span> heights = Vec::new();
     <span class="kw">for</span> chunk in latlngs.as_slice().chunks(<span class="dv">100</span>) {
-        heights.push_all(get_heights_request(&amp;api, chunk).as_slice());
+        heights.push_all(get_heights_request(api.as_slice(), chunk).as_slice());
     }
     heights
 }</code></pre>
-<p>We pass a vector of points in as a reference. The reason we use a reference here is because otherwise the vector would “move”. In Rust a resource has one owner. If the resource is passed to a function that transfers to that function. When the resource’s owner dies (eg. a function ending) the resource is destroyed and so it cannot be used anymore. Using a reference allows us to have a look at the resource but not own it - we “borrow” it in Rust speak. Unfortunately I glossed over this in the previous blog post so apologies. If this doesn’t make sense then <a href="http://rustbyexample.com/move.html">Rust by Example</a> may help.</p>
-<p>First we try to get the environment variable “GAPI”. <code>getenv</code> returns an <code>Option</code>. We use the <code>expect</code> function on it. <code>expect</code> is like <code>unwrap</code> except that if there is no value to unwrap it will fail with the error message you provided.</p>
-<p>We turn the vector into a slice (a reference to a number of values) and call <code>chunks</code>. <code>chunks(100)</code> creates an iterator which gives slices of length 100 from the slice it was called on. We then pass it to <code>get_heights_request</code>.</p>
+<p>We pass a slice of points in. Passing slices as arguments is nice because literals (like <code>&amp;[1, 2, 3]</code> and <code>&quot;foo&quot;</code>) are slices and other types that could be used (like <code>Vec</code> or <code>String</code>) can easily be turned into a slice by using <code>as_slice</code>, as you can see later on in the function with <code>api</code>.</p>
+<p>We try to get the environment variable “GAPI”. <code>getenv</code> returns an <code>Option</code>. We use the <code>expect</code> function on it which is like <code>unwrap</code> except that if there is no value to unwrap it will fail with the error message you provided.</p>
+<p>Then <code>chuncks</code> is called on the slice. <code>chunks(100)</code> creates an iterator which gives slices of length 100 from the slice it was called on. We then pass it to <code>get_heights_request</code>.</p>
 <p>So how do we do a web request it Rust? Well, as I write this, there is only one nice way to do it and that is with a library called <a href="https://github.com/chris-morgan/rust-http">rust-http</a>. This library is going to be replaced in the future but whilst the new library is being written rust-http is still maintained.</p>
 <p>Let’s add a couple of dependencies to Cargo.toml:</p>
 <pre><code>[dependencies.url]
@@ -72,7 +72,7 @@ git = &quot;https://github.com/servo/rust-url&quot;
 [dependencies.http]
 git = &quot;https://github.com/chris-morgan/rust-http&quot;</code></pre>
 <p>And now we can write <code>get_heights_request</code>:</p>
-<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> get_heights_request(api: &amp;String, latlngs: &amp;[(<span class="kw">f64</span>, <span class="kw">f64</span>)]) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> get_heights_request(api: &amp;<span class="kw">str</span>, latlngs: &amp;[(<span class="kw">f64</span>, <span class="kw">f64</span>)]) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
     <span class="kw">let</span> <span class="kw">mut</span> heights = Vec::new();
     <span class="kw">let</span> s: Vec&lt;String&gt; = latlngs.iter()
                                 .map(|&amp;(lat,lng)| <span class="ot">format!</span>(<span class="st">&quot;{},{}&quot;</span>, lat, lng))
@@ -99,8 +99,8 @@ git = &quot;https://github.com/chris-morgan/rust-http&quot;</code></pre>
 <p>The code looks up the results array. <code>Json</code> is an enum and so could be a list or an object or a number or whatever else we need to get the value as a list before we can do anything with it. We go through each value and push the elevation value onto a vector. Originally I was going to use a hash map with the latitude and longitude as the key so we could look up the elevation of the point we wanted. Luckily Google returns the elevations in order so we can just use the index of the current point to find the elevation. This is a pretty brittle, stupid and generally nasty approach but if a job’s worth doing, it’s worth under-doing, right?</p>
 <p>We can test this code fairly easily. If you replace <code>main</code> with this:</p>
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> main() {
-    <span class="kw">let</span> latlngs = <span class="ot">vec!</span>((<span class="dv">32.23</span>, -<span class="dv">1.121</span>), (<span class="dv">43.23</span>, <span class="dv">12.1</span>));
-    <span class="ot">println!</span>(<span class="st">&quot;{}&quot;</span>, get_heights(&amp;latlngs));
+    <span class="kw">let</span> latlngs = &amp;[(<span class="dv">32.23</span>, -<span class="dv">1.121</span>), (<span class="dv">43.23</span>, <span class="dv">12.1</span>)];
+    <span class="ot">println!</span>(<span class="st">&quot;{}&quot;</span>, get_heights(latlngs));
 }</code></pre>
 <p>Hopefully it’ll all compile and give you two heights in metres when you run it.</p>
 <h2 id="the-model-format">The model format</h2>
@@ -174,26 +174,27 @@ git = &quot;https://github.com/bjz/cgmath-rs&quot;</code></pre>
 <p>I’m going to create a type alias for <code>Vector3</code> to save myself some typing:</p>
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">type</span> V3 = Vector3&lt;<span class="kw">f64</span>&gt;;</code></pre>
 <p>And now to the actual scaling. I want to give a function a size and a <code>Vec</code> of numbers and I want back the biggest number which we can then multiply each number by and the result does not exceed the given size.</p>
-<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> scale(points: &amp;Vec&lt;<span class="kw">f64</span>&gt;, size: <span class="kw">int</span>) -&gt; (<span class="kw">f64</span>, <span class="kw">f64</span>) {
-    <span class="kw">let</span> <span class="kw">mut</span> points = points.clone();
-    points.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Equal));
-    <span class="kw">let</span> min = points[<span class="dv">0</span>];
-    <span class="kw">let</span> max = points.last().unwrap();
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> scale(points: &amp;[<span class="kw">f64</span>], size: <span class="kw">int</span>) -&gt; (<span class="kw">f64</span>, <span class="kw">f64</span>) {
+    <span class="kw">let</span> <span class="kw">mut</span> min = <span class="kw">f64</span>::INFINITY;
+    <span class="kw">let</span> <span class="kw">mut</span> max = <span class="kw">f64</span>::NEG_INFINITY;
+    <span class="kw">for</span> &amp;point in points.iter() {
+        <span class="kw">if</span> point &lt; min {
+            min = point;
+        } <span class="kw">else</span> <span class="kw">if</span> point &gt; min {
+            max = point;
+        }
+    }
     ((size <span class="kw">as</span> <span class="kw">f64</span>) / (max - min), min)
 }</code></pre>
-<p>The code is pretty nasty unfortunately. There are two traits which deal with comparing values - <code>PartialOrd</code> and <code>Ord</code>. <code>f64</code> only implements <code>PartialOrd</code> which means we can’t use maximum and minimum functions (you can read more <a href="http://www.reddit.com/r/rust/comments/29kia3/no_ord_for_f32/">here</a>). To get around this we sort the points instead and get the first and last elements. <code>unwrap_or</code> is like <code>unwrap</code> but it will return the value it’s given if the unwrap fails. <code>scale</code> returns the scale and the minimum value it found. The minimum is needed as we take that away from each value before we multiply them so that the smallest number ends up being 0.</p>
+<p>The code is a bit nasty unfortunately. There are two traits which deal with comparing values - <code>PartialOrd</code> and <code>Ord</code>. <code>f64</code> only implements <code>PartialOrd</code> which means we can’t use maximum and minimum functions. To get around this we go iterate through each point and if it’s the smallest or biggest we’ve found so far we store it. <code>scale</code> returns the scale and the minimum value it found. The minimum is needed as we take that away from each value before we multiply them so that the smallest number ends up being 0.</p>
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> latlngs_to_coords(ways: Vec&lt;Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt;&gt;, size: <span class="kw">int</span>) -&gt; (Vec&lt;Vec&lt;V3&gt;&gt;, <span class="kw">f64</span>) {
     <span class="kw">let</span> <span class="kw">mut</span> coords = Vec::new();
     <span class="kw">let</span> flat = ways.as_slice().concat_vec();
-    <span class="kw">let</span> mtrs: Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt; = 
-        flat.iter()
-            .map(|&amp;(lat, lng)| latlng_to_metres(lat, lng)).collect();
-    <span class="kw">let</span> heights = get_heights(&amp;flat);
-    <span class="kw">let</span> (_, min_h) = scale(&amp;heights, <span class="dv">5</span>);
-    <span class="kw">let</span> xs = mtrs.iter().map(|&amp;(x, _)| x).collect();
-    <span class="kw">let</span> ys = mtrs.iter().map(|&amp;(_, y)| y).collect();
-    <span class="kw">let</span> (sx, min_x) = scale(&amp;xs, size);
-    <span class="kw">let</span> (sy, min_y) = scale(&amp;ys, size);
+    <span class="kw">let</span> heights = get_heights(flat.as_slice());
+    <span class="kw">let</span> (_, min_h) = scale(heights.as_slice(), <span class="dv">5</span>);
+    <span class="kw">let</span> (xs, ys): (Vec&lt;<span class="kw">f64</span>&gt;, Vec&lt;<span class="kw">f64</span>&gt;) = std::vec::unzip(flat.iter().map(|&amp;(lat, lng)| latlng_to_metres(lat, lng)));
+    <span class="kw">let</span> (sx, min_x) = scale(xs.as_slice(), size);
+    <span class="kw">let</span> (sy, min_y) = scale(ys.as_slice(), size);
     <span class="kw">let</span> s = <span class="kw">if</span> sx &lt; sy {sx} <span class="kw">else</span> {sy};
     <span class="kw">let</span> <span class="kw">mut</span> i = <span class="dv">0</span>;
     <span class="kw">for</span> latlngs in ways.iter() {
@@ -210,7 +211,7 @@ git = &quot;https://github.com/bjz/cgmath-rs&quot;</code></pre>
     (coords, s)
 }</code></pre>
 <p>As I said in the last post we need to keep the structure of the OSM file together, in particular we have to group the points by which way part of the track they were part of as the points in part of the track should be joined up but the parts of the track shouldn’t as they are not guaranteed to be next to each other. This is why we get a <code>Vec</code> of <code>Vec</code>s. First off we turn this into a flat <code>Vec</code>.</p>
-<p>After we’ve got the flat <code>Vec</code> we turn the degrees of latitude and longitude into metres to match the elevations and to make scaling a little easier. The final scale is the smallest one out of the two so both directions fit into <code>size</code>. An if statement is needed here because of <code>f64</code> not implementing <code>Ord</code> (which means that <code>minimum</code> can’t be used).</p>
+<p>After we’ve got the flat <code>Vec</code> we turn the degrees of latitude and longitude into metres to match the elevations and to make scaling a little easier. <code>unzip</code> is quite a cool function that takes and iterator which will iterate over pairs and returns two <code>Vec</code>s - one for all the first values in the pair and one for all the second value in the pair. The final scale is the smallest one out of the two so both directions fit into <code>size</code>. An if statement is needed here because of <code>f64</code> not implementing <code>Ord</code> (which means that <code>minimum</code> can’t be used).</p>
 <p>It’s then just a case of iterating through the “ways” (named due to the OSM element “way”) and iterating through the points in each one. We use <code>i</code> to keep track of which point we are on so that we can look it up in the list of elevation. This shows why I should have used a hash map for the elevation! <code>0.5</code> is added to the all the heights because otherwise the lowest point would be 0 units high!</p>
 <p>So how do we convert from degrees of latitude and longitude to metres? Irritatingly the Earth is not flat and so the conversion from latitude and longitude to metres is a bit tricky. One degree of latitude at the equator is equal to a different number of metres nearer the poles. As usual I’m going to cheat a bit and say that one degree of latitude is 111,111m. It’s not perfect but I think it’s an ok approximation at the distances we’re dealing with. Once again I’m no expert so feel free to correct me. <a href="http://gis.stackexchange.com/questions/2951/algorithm-for-offsetting-a-latitude-longitude-by-some-amount-of-meters">This StackExchange answer</a> says this is sufficiently accurate for distances of a few kilometres.</p>
 <pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> latlng_to_metres(lat: <span class="kw">f64</span>, lng: <span class="kw">f64</span>) -&gt; (<span class="kw">f64</span>, <span class="kw">f64</span>) {
@@ -285,14 +286,14 @@ git = &quot;https://github.com/bjz/cgmath-rs&quot;</code></pre>
     <span class="kw">let</span> path = &amp;Path::new(osm_filename.clone());
     <span class="ot">println!</span>(<span class="st">&quot;Reading osm file&quot;</span>);
     <span class="kw">let</span> osm = Osm::new(path).unwrap();
-    <span class="kw">let</span> relation = osm.elements.values().filter(|e| {
+    <span class="kw">let</span> relation = osm.elements.values().find(|e| {
         <span class="kw">match</span> **e {
             Relation{tags: <span class="kw">ref</span> ts, ..} =&gt; {
                 ts.find(&amp;<span class="st">&quot;name&quot;</span>.to_string()) == <span class="kw">Some</span>(track_name)
             }
             _ =&gt; <span class="kw">false</span>
         }
-    }).next().expect(<span class="ot">format!</span>(<span class="st">&quot;Could not find relation with name {}&quot;</span>, track_name).as_slice());
+    }).expect(<span class="ot">format!</span>(<span class="st">&quot;Could not find relation with name {}&quot;</span>, track_name).as_slice());
     <span class="ot">println!</span>(<span class="st">&quot;Finding nodes of the track&quot;</span>);
     <span class="kw">let</span> latlngs = expand_relation(relation, &amp;osm.elements);
     <span class="ot">println!</span>(<span class="st">&quot;Converting to model&quot;</span>);
@@ -302,7 +303,8 @@ git = &quot;https://github.com/bjz/cgmath-rs&quot;</code></pre>
     <span class="kw">let</span> <span class="kw">mut</span> f = File::open_mode(&amp;Path::new(out_filename.clone()), Open, Write);
     f.write_str(obj.to_string().as_slice()).unwrap();
 }</code></pre>
-<p>The <code>main</code> function shouldn’t be too much of a surprise. It gets the required information from the arguments of the program (rather unsafely) but other than that it is the same code as the end of the last post up until we convert to coordinates. I chose 200 as the size pretty much at random, feel free to try other sizes. The first argument to <code>to_wavefront</code> is the thickness of the road. I’ve passed in 14m which is about the width of an F1 track. Then we just save it to a file.</p>
+<p>The <code>main</code> function shouldn’t be too much of a surprise. It gets the required information from the arguments of the program (rather unsafely) but other than that it’s fairly similar to the code from the last post apart from the fact <code>find</code> is used instead of <code>filter</code> as we only need one relation.</p>
+<p>I chose 200 as the size pretty much at random, feel free to try other sizes. The first argument to <code>to_wavefront</code> is the thickness of the road. I’ve passed in 14m which is about the width of an F1 track. Then we just save it to a file.</p>
 <p>Run like so:</p>
 <pre><code>$ cargo build
 $ ./target/osmmodels spa.osm &quot;Ciruit de Spa Francorchamps&quot; spa.obj</code></pre>
@@ -317,7 +319,7 @@ $ ./target/osmmodels spa.osm &quot;Ciruit de Spa Francorchamps&quot; spa.obj</co
 <p><img width="75%" height="75%" src="../images/track_models/render1.png" /></p>
 <p>I’m pretty chuffed with the result! You can really see the track rising out of La Source up to Raidillon and then the Kemmel straight. After Rivage (the tall hairpin at the top of the image) it drops down all the way to Stavelot and rises back up to the bus stop chicane.</p>
 <p>Most people reading this are probably not that impressed but to me this is awesome. Feel free to try it on different tracks, although very few tracks have the elevation changes that Spa does. I reckon this could be used to create a model for GPS tracks create when cycling, for example. I could then finally prove just how steep that hill was!</p>
-<p>The code is available <a href="https://github.com/mattyhall/osmmodels">here</a>.</p>
+<p>The code is available <a href="https://github.com/mattyhall/osmmodels">here</a>. Thanks to dbaupp on reddit for improving a fair portion of my code.</p>
 
             </div>
             <footer id="footer" class="row">
