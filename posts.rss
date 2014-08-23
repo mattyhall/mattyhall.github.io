@@ -6,8 +6,15 @@
         <description><![CDATA[Feed for Matthew Hall's blog]]></description>
         <atom:link href="http://mattyhall.github.io/posts.rss" rel="self"
                    type="application/rss+xml" />
-        <lastBuildDate>Tue, 19 Aug 2014 00:00:00 UT</lastBuildDate>
+        <lastBuildDate>Fri, 22 Aug 2014 00:00:00 UT</lastBuildDate>
         <item>
+    <title>Creating models of F1 tracks in Rust - Part 2</title>
+    <link>http://mattyhall.github.io/posts/2014-08-22-f1-track-models-pt-2.html</link>
+    <description><![CDATA[We turn a series of points from OSM into a 3d model]]></description>
+    <pubDate>Fri, 22 Aug 2014 00:00:00 UT</pubDate>
+    <guid>http://mattyhall.github.io/posts/2014-08-22-f1-track-models-pt-2.html</guid>
+</item>
+<item>
     <title>Creating models of F1 tracks in Rust - Part 1</title>
     <link>http://mattyhall.github.io/posts/2014-08-19-f1-track-models-pt-1.html</link>
     <description><![CDATA[We start off by loading an open street map xml file into Rust]]></description>

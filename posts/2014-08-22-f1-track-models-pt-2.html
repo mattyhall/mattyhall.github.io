@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-44644915-1']);
+            _gaq.push(['_trackPageview']);
+
+            (function() {
+             var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+             ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+             var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+             })();
+        </script>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Matthew Hall - Creating models of F1 tracks in Rust - Part 2</title>
+        <link rel="stylesheet" type="text/css" href="../css/bootstrap.css" />
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    </head>
+    <body>
+        <div class="container">
+          <nav class="navbar navbar-fixed-top">
+              <div id="logo" class="navbar-header">
+                  <a href="../">Matthew Hall</a>
+              </div>
+              <div id="navigation" class="nav navbar-nav navbar-collapse">
+                  <a href="../">Home</a>
+                  <a href="../projects.html">Projects</a>
+                  <a href="../archive.html">Archive</a>
+                  <a href="../about.html">About</a>
+              </div>
+              <div class="navbar-right marks">
+                <a href="https://github.com/mattyhall/"><img src="../images/github_mark.png" /></a>
+                <a href="http://twitter.com/hailmattyhall"><img src="../images/twitter_mark.png" /></a>
+              </div>
+          </nav>
+        </div>
+        <div id="content" class="container">
+            <div class="row">
+                <h1>Creating models of F1 tracks in Rust - Part 2</h1>
+
+                <div class="info">
+    Posted on 2014-08-22 under <a href="../tags/rust.html">rust</a>, <a href="../tags/programming.html">programming</a>, <a href="../tags/formula1.html">formula1</a>
+</div>
+
+<p><strong>DISLAIMER: Compiled with rustc version 0.12.0-pre-nightly (commit 01ec6fab2). Whether it works with later versions is anyone’s guess. I’m only a beginner to Rust so do not think that I know what I’m doing or that my code is idomatic. :)</strong></p>
+<p><a href="../posts/2014-08-19-f1-track-models-pt-1.html">Last time</a> we wrote a library in Rust to read Open Street Maps files into Rust and got the latitude and longitude of all points on the track. Now we’ll get on with actually creating a model of the track. Reading the last post isn’t required however it may be useful to read the last section of the post because we will use that code in this one.</p>
+<h2 id="getting-the-elevation-data">Getting the elevation data</h2>
+<p>Our first job today is to get the elevation data for the track. In this case I have decided to use the <a href="https://developers.google.com/maps/documentation/elevation/">Google Elevation API</a> just because it’s really easy to call. You pass a number of latitude/longitude points as GET parameters and it will send you the elevation in meters as JSON.</p>
+<p>The only problem with this API is that URLs are limited to around 2000 characters so we can’t send all the locations at once. I worked out by trial and error we can send about 100 points before we break that limit.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="co">// top of src/main.rs</span>
+<span class="kw">use</span> std::os;
+
+<span class="kw">fn</span> get_heights(latlngs: &amp;Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt;) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
+    <span class="kw">let</span> api: String = os::getenv(<span class="st">&quot;GAPI&quot;</span>).expect(<span class="st">&quot;Please set GAPI&quot;</span>);
+    <span class="kw">let</span> <span class="kw">mut</span> heights = Vec::new();
+    <span class="kw">for</span> chunk in latlngs.as_slice().chunks(<span class="dv">100</span>) {
+        heights.push_all(get_heights_request(&amp;api, chunk).as_slice());
+    }
+    heights
+}</code></pre>
+<p>We pass a vector of points in as a reference. The reason we use a reference here is because otherwise the vector would “move”. In Rust a resource has one owner. If the resource is passed to a function that transfers to that function. When the resource’s owner dies (eg. a function ending) the resource is destroyed and so it cannot be used anymore. Using a reference allows us to have a look at the resource but not own it - we “borrow” it in Rust speak. Unfortunately I glossed over this in the previous blog post so apologies. If this doesn’t make sense then <a href="http://rustbyexample.com/move.html">Rust by Example</a> may help.</p>
+<p>First we try to get the environment variable “GAPI”. <code>getenv</code> returns an <code>Option</code>. We use the <code>expect</code> function on it. <code>expect</code> is like <code>unwrap</code> except that if there is no value to unwrap it will fail with the error message you provided.</p>
+<p>We turn the vector into a slice (a reference to a number of values) and call <code>chunks</code>. <code>chunks(100)</code> creates an iterator which gives slices of length 100 from the slice it was called on. We then pass it to <code>get_heights_request</code>.</p>
+<p>So how do we do a web request it Rust? Well, as I write this, there is only one nice way to do it and that is with a library called <a href="https://github.com/chris-morgan/rust-http">rust-http</a>. This library is going to be replaced in the future but whilst the new library is being written rust-http is still maintained.</p>
+<p>Let’s add a couple of dependencies to Cargo.toml:</p>
+<pre><code>[dependencies.url]
+git = &quot;https://github.com/servo/rust-url&quot;
+
+[dependencies.http]
+git = &quot;https://github.com/chris-morgan/rust-http&quot;</code></pre>
+<p>And now we can write <code>get_heights_request</code>:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> get_heights_request(api: &amp;String, latlngs: &amp;[(<span class="kw">f64</span>, <span class="kw">f64</span>)]) -&gt; Vec&lt;<span class="kw">f64</span>&gt; {
+    <span class="kw">let</span> <span class="kw">mut</span> heights = Vec::new();
+    <span class="kw">let</span> s: Vec&lt;String&gt; = latlngs.iter()
+                                .map(|&amp;(lat,lng)| <span class="ot">format!</span>(<span class="st">&quot;{},{}&quot;</span>, lat, lng))
+                                .collect();
+    <span class="kw">let</span> url = Url::parse(<span class="ot">format!</span>(
+        <span class="st">&quot;https://maps.googleapis.com/maps/api/elevation/json?key={}&amp;locations={}&quot;</span>,
+        api,
+        s.connect(<span class="st">&quot;|&quot;</span>)).as_slice()).unwrap();
+    <span class="kw">let</span> request: RequestWriter = RequestWriter::new(Get, url).unwrap();
+    <span class="kw">let</span> <span class="kw">mut</span> response = <span class="kw">match</span> request.read_response() {
+        <span class="kw">Ok</span>(r) =&gt; r,
+        <span class="kw">Err</span>(e) =&gt; <span class="ot">fail!</span>(<span class="st">&quot;Could not read response&quot;</span>)
+    };
+    <span class="kw">let</span> body = response.read_to_end().unwrap();
+    <span class="kw">let</span> s = <span class="kw">str</span>::from_utf8(body.as_slice()).expect(<span class="st">&quot;body from_utf8&quot;</span>);
+    <span class="kw">let</span> json: json::Json = json::from_str(s).unwrap();
+    <span class="kw">for</span> res in json.find(&amp;<span class="st">&quot;results&quot;</span>.to_string()).unwrap().as_list().unwrap().iter() {
+        heights.push(res.find(&amp;<span class="st">&quot;elevation&quot;</span>.to_string()).unwrap().as_number().unwrap());
+    }
+    heights
+}</code></pre>
+<p>As far as I know there’s no library to handle encoding GET parameters so we will have to build the URL ourselves. For each point we separate the latitude and longitude by a comma. We separate each point with a pipe using <code>connect</code> which is similar to Python’s <code>join</code> only <code>connect</code> is called on the collection, not on the separating string.</p>
+<p>After getting the response back we have to pick apart the JSON. Rust has the ability to automatically create methods for decoding JSON into a structure but I thought this would be overkill in my case. The reason for this is I think I would need two structs - a struct for the top level object which has a “results” value and a “status” value. The “results” is an array of objects that have an “elevation”. Having two structs with a couple of members each seemed like a bit of a waste.</p>
+<p>The code looks up the results array. <code>Json</code> is an enum and so could be a list or an object or a number or whatever else we need to get the value as a list before we can do anything with it. We go through each value and push the elevation value onto a vector. Originally I was going to use a hash map with the latitude and longitude as the key so we could look up the elevation of the point we wanted. Luckily Google returns the elevations in order so we can just use the index of the current point to find the elevation. This is a pretty brittle, stupid and generally nasty approach but if a job’s worth doing, it’s worth under-doing, right?</p>
+<p>We can test this code fairly easily. If you replace <code>main</code> with this:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> main() {
+    <span class="kw">let</span> latlngs = <span class="ot">vec!</span>((<span class="dv">32.23</span>, -<span class="dv">1.121</span>), (<span class="dv">43.23</span>, <span class="dv">12.1</span>));
+    <span class="ot">println!</span>(<span class="st">&quot;{}&quot;</span>, get_heights(&amp;latlngs));
+}</code></pre>
+<p>Hopefully it’ll all compile and give you two heights in metres when you run it.</p>
+<h2 id="the-model-format">The model format</h2>
+<p>We’re going to output the model as a <a href="http://en.wikipedia.org/wiki/Wavefront_.obj_file">Wavefront file</a>. It’s a really simple format which is nice. We can have vertices:</p>
+<pre><code>v 10 10 10
+v 20 10 10
+v 10 15 10</code></pre>
+<p>And we could join these up to create a triangle using a face:</p>
+<pre><code>f 1 2 3</code></pre>
+<p>or</p>
+<pre><code>f -1 -2 -3</code></pre>
+<p>A face can have three or more vertices and the vertices are specified as line numbers. To make things super easy they can be negative numbers from the current line as well.</p>
+<p>To keep the main file tidy let’s put our representation of the Wavefront format in another file. Put the following into <code>src/lib.rs</code>:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="ot">#[</span>deriving<span class="ot">(</span>Show<span class="ot">)]</span>
+<span class="kw">pub</span> <span class="kw">enum</span> WavefrontValue {
+    Vertex(<span class="kw">f64</span>, <span class="kw">f64</span>, <span class="kw">f64</span>),
+    Face(Vec&lt;<span class="kw">int</span>&gt;)
+}
+
+<span class="kw">impl</span> WavefrontValue {
+    <span class="kw">pub</span> <span class="kw">fn</span> to_string(&amp;<span class="kw">self</span>) -&gt; String {
+        <span class="kw">match</span> *<span class="kw">self</span> {
+            Vertex(x, y, z) =&gt; <span class="ot">format!</span>(<span class="st">&quot;v {} {} {}&quot;</span>, x, y, z),
+            Face(<span class="kw">ref</span> locs) =&gt;  {
+                <span class="kw">let</span> locs: Vec&lt;String&gt; = locs.iter().map(|v| v.to_string()).collect();
+                <span class="ot">format!</span>(<span class="st">&quot;f {}&quot;</span>, locs.connect(<span class="st">&quot; &quot;</span>))
+            }
+        }
+    }
+}</code></pre>
+<p>A Wavefront value can either be a vertex or a face so we use an enum. Just like structs we can define methods on enums and so we create a <code>to_string</code> method to turn a value into a string. <code>Vertex</code> is pretty easy. For a <code>Face</code> we have to turn each number into a string. We then use <code>connect</code> again to separate them by a space. Notice the <code>ref</code> keyword. If you omit it you will get a compilation error. <code>ref</code> means <code>locs</code> will contain a reference to the value. We have to do this because otherwise we would take ownership of the value which doesn’t work as we don’t have ownership of the <code>WavefrontValue</code>.</p>
+<p>Note the <code>#[deriving(Show)]</code>. This line tells the Rust compiler to implement the methods needed to show the enum. This should be familiar to you if you’ve used Haskell before.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="ot">#[</span>deriving<span class="ot">(</span>Show<span class="ot">)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> Wavefront {
+    <span class="kw">pub</span> values: Vec&lt;WavefrontValue&gt;
+}
+
+<span class="kw">impl</span> Wavefront {
+    <span class="kw">pub</span> <span class="kw">fn</span> new() -&gt; Wavefront {
+        Wavefront {values: Vec::new()}
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> to_string(&amp;<span class="kw">self</span>) -&gt; String {
+        <span class="kw">let</span> vals: Vec&lt;String&gt; = <span class="kw">self</span>.values.iter().map(|v| v.to_string()).collect();
+        vals.connect(<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>)
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> add_vertex(&amp;<span class="kw">mut</span> <span class="kw">self</span>, x: <span class="kw">f64</span>, y: <span class="kw">f64</span>, z: <span class="kw">f64</span>) {
+        <span class="kw">self</span>.values.push(Vertex(x, y, z));
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> add_face(&amp;<span class="kw">mut</span> <span class="kw">self</span>, vec: Vec&lt;<span class="kw">int</span>&gt;) {
+        <span class="kw">self</span>.values.push(Face(vec));
+    }
+}</code></pre>
+<p>Everything else is pretty straight forward. To turn a <code>Wavefront</code> struct into a string we just need to turn each <code>WavefrontValue</code> into a string and separate them by newlines. We supply two methods to make adding values a bit easier.</p>
+<p>Before we can use it we need to add the following lines to the top of <code>src/main,rs</code>:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">extern</span> crate osmmodels;
+
+<span class="kw">use</span> osmmodels::Wavefront;</code></pre>
+<h2 id="turning-points-into-coordinates">Turning points into coordinates</h2>
+<p>Before we get to outputing the model I’m going to scale the latitude and longitude points a bit. The reason for this is primarily so that the height of the model is to the same scale as the width. It would look weird if the elevation had a scale of 1px per 1m and the x and y coordinates had a scale of 10px per 1m! The other reason is that the latitude and the longitudes don’t change that much and so if we used them as is the model would be pretty small and diffcult to find. I mean, I could just learn how to use Blender properly and zoom in a bit but where’s the fun in that?</p>
+<p>Before we crack on with the code there is one last dependency to add:</p>
+<pre><code>[dependencies.cgmath]
+git = &quot;https://github.com/bjz/cgmath-rs&quot;</code></pre>
+<p>I’m going to ditch the tuples I used to represent points and start using vectors from a maths library. This will become useful later on! Let’s include the library:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">extern</span> crate cgmath;
+
+<span class="kw">use</span> cgmath::{Vector3, EuclideanVector, Vector};</code></pre>
+<p>We include <code>Vector3</code> which is a type and <code>EuclideanVector</code> and <code>Vector</code> which are traits. Traits are similar to Java interfaces. A trait defines a number of functions and for something to implement a trait it much implement these functions. <code>Iterator</code> is a trait which defines a method <code>next</code>. Similarly <code>Show</code> is a trait.</p>
+<p>I’m going to create a type alias for <code>Vector3</code> to save myself some typing:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">type</span> V3 = Vector3&lt;<span class="kw">f64</span>&gt;;</code></pre>
+<p>And now to the actual scaling. I want to give a function a size and a <code>Vec</code> of numbers and I want back the biggest number which we can then multiply each number by and the result does not exceed the given size.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> scale(points: &amp;Vec&lt;<span class="kw">f64</span>&gt;, size: <span class="kw">int</span>) -&gt; (<span class="kw">f64</span>, <span class="kw">f64</span>) {
+    <span class="kw">let</span> <span class="kw">mut</span> points = points.clone();
+    points.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Equal));
+    <span class="kw">let</span> min = points[<span class="dv">0</span>];
+    <span class="kw">let</span> max = points.last().unwrap();
+    ((size <span class="kw">as</span> <span class="kw">f64</span>) / (max - min), min)
+}</code></pre>
+<p>The code is pretty nasty unfortunately. There are two traits which deal with comparing values - <code>PartialOrd</code> and <code>Ord</code>. <code>f64</code> only implements <code>PartialOrd</code> which means we can’t use maximum and minimum functions (you can read more <a href="http://www.reddit.com/r/rust/comments/29kia3/no_ord_for_f32/">here</a>). To get around this we sort the points instead and get the first and last elements. <code>unwrap_or</code> is like <code>unwrap</code> but it will return the value it’s given if the unwrap fails. <code>scale</code> returns the scale and the minimum value it found. The minimum is needed as we take that away from each value before we multiply them so that the smallest number ends up being 0.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> latlngs_to_coords(ways: Vec&lt;Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt;&gt;, size: <span class="kw">int</span>) -&gt; (Vec&lt;Vec&lt;V3&gt;&gt;, <span class="kw">f64</span>) {
+    <span class="kw">let</span> <span class="kw">mut</span> coords = Vec::new();
+    <span class="kw">let</span> flat = ways.as_slice().concat_vec();
+    <span class="kw">let</span> mtrs: Vec&lt;(<span class="kw">f64</span>, <span class="kw">f64</span>)&gt; = 
+        flat.iter()
+            .map(|&amp;(lat, lng)| latlng_to_metres(lat, lng)).collect();
+    <span class="kw">let</span> heights = get_heights(&amp;flat);
+    <span class="kw">let</span> (_, min_h) = scale(&amp;heights, <span class="dv">5</span>);
+    <span class="kw">let</span> xs = mtrs.iter().map(|&amp;(x, _)| x).collect();
+    <span class="kw">let</span> ys = mtrs.iter().map(|&amp;(_, y)| y).collect();
+    <span class="kw">let</span> (sx, min_x) = scale(&amp;xs, size);
+    <span class="kw">let</span> (sy, min_y) = scale(&amp;ys, size);
+    <span class="kw">let</span> s = <span class="kw">if</span> sx &lt; sy {sx} <span class="kw">else</span> {sy};
+    <span class="kw">let</span> <span class="kw">mut</span> i = <span class="dv">0</span>;
+    <span class="kw">for</span> latlngs in ways.iter() {
+        <span class="kw">let</span> <span class="kw">mut</span> way = Vec::new();
+        <span class="kw">for</span> &amp;(lat, lng) in latlngs.iter() {
+            <span class="kw">let</span> (x, y) = latlng_to_metres(lat, lng);
+            way.push(Vector3::new((x - min_x) * s,
+                                  (heights[i] - min_h) * s,
+                                  (y - min_y) * s));
+            i += <span class="dv">1</span>
+        }
+        coords.push(way);
+    }
+    (coords, s)
+}</code></pre>
+<p>As I said in the last post we need to keep the structure of the OSM file together, in particular we have to group the points by which way part of the track they were part of as the points in part of the track should be joined up but the parts of the track shouldn’t as they are not guaranteed to be next to each other. This is why we get a <code>Vec</code> of <code>Vec</code>s. First off we turn this into a flat <code>Vec</code>.</p>
+<p>After we’ve got the flat <code>Vec</code> we turn the degrees of latitude and longitude into metres to match the elevations and to make scaling a little easier. The final scale is the smallest one out of the two so both directions fit into <code>size</code>. An if statement is needed here because of <code>f64</code> not implementing <code>Ord</code> (which means that <code>minimum</code> can’t be used).</p>
+<p>It’s then just a case of iterating through the “ways” (named due to the OSM element “way”) and iterating through the points in each one. We use <code>i</code> to keep track of which point we are on so that we can look it up in the list of elevation. This shows why I should have used a hash map for the elevation! <code>0.5</code> is added to the all the heights because otherwise the lowest point would be 0 units high!</p>
+<p>So how do we convert from degrees of latitude and longitude to metres? Irritatingly the Earth is not flat and so the conversion from latitude and longitude to metres is a bit tricky. One degree of latitude at the equator is equal to a different number of metres nearer the poles. As usual I’m going to cheat a bit and say that one degree of latitude is 111,111m. It’s not perfect but I think it’s an ok approximation at the distances we’re dealing with. Once again I’m no expert so feel free to correct me. <a href="http://gis.stackexchange.com/questions/2951/algorithm-for-offsetting-a-latitude-longitude-by-some-amount-of-meters">This StackExchange answer</a> says this is sufficiently accurate for distances of a few kilometres.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> latlng_to_metres(lat: <span class="kw">f64</span>, lng: <span class="kw">f64</span>) -&gt; (<span class="kw">f64</span>, <span class="kw">f64</span>) {
+    (lat * <span class="dv">111111.0</span>, lng * <span class="dv">111111.0</span> * lat.to_radians().cos())
+}</code></pre>
+<h2 id="connecting-the-dots">Connecting the dots</h2>
+<p>We’re nearly there, I promise. The data from Open Street Maps only gives us points <em>on</em> the track. This means we don’t have the points for the left hand side of the track and the right hand side of the track which means we’re going to have to do a bit of maths to create the model. If we have three points A, B, C like so:</p>
+<p><img width="571" height="340" src="../images/track_models/single_line.png" /></p>
+<p>As Wavefront files are defined in terms of vertices we will need to find the points A’, B’, B’’ and C so that the lines that join each point are parallel:</p>
+<p><img width="571" height="340" src="../images/track_models/parallel_lines.png" /></p>
+<p>As you can hopefully see this is not perfect by any means. There’s a gap opposite B because we find a point perpendicular to the first line and then find a point perpendicular to the second line and these points will be different. To fix this let’s join them up:</p>
+<p><img width="571" height="340" src="../images/track_models/bridge_gap.png" /></p>
+<p>It doesn’t look fantastic but it is unlikely to be a problem because in the corners the points are very close together which should minimise the ugliness. There’s probably a much better way to do this that I’m too daft to see. This method is decent though and is really easy to implement:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> join_up(w: &amp;<span class="kw">mut</span> Wavefront, a: V3, b: V3, thickness: <span class="kw">f64</span>) {
+    <span class="kw">let</span> ab = Vector3::new(b.x - a.x, <span class="dv">0.0</span>, b.z - a.z).normalize();
+    <span class="kw">let</span> p = Vector3::new(-ab.y, <span class="dv">0.0</span>, ab.x);
+    <span class="kw">let</span> a1 = a + p.mul_s(thickness);
+    <span class="kw">let</span> b1 = b + p.mul_s(thickness);
+    top(w, a, a1, b, b1);
+    side(w, a, b);
+    side(w, a1, b1);
+    bot(w, a, a1, b, b1);
+}</code></pre>
+<p>So <code>join_up</code> takes the <code>Wavefront</code> we are writing to, two points and the thickness of the road. <code>ab</code> is a vector representing the direction of the line a to b. <code>p</code> is the vector perpendicular to <code>ab</code> and by adding this vector to the position vectors <code>a</code> and <code>b</code>, multiplied by the thickness we get the points we need. Multiplying by the thickness just makes the <code>p</code> vector longer. <code>top</code>, <code>side</code> and <code>bot</code> add faces to the <code>Wavefront</code>:</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> top(w: &amp;<span class="kw">mut</span> Wavefront, a: V3, a1: V3, b: V3, b1: V3) {
+    w.add_vertex(a.x, a.y, a.z);
+    w.add_vertex(a1.x, a1.y, a1.z);
+    w.add_vertex(b1.x, b1.y, b1.z);
+    w.add_vertex(b.x, b.y, b.z);
+    w.add_face(<span class="ot">vec!</span>(-<span class="dv">1</span>, -<span class="dv">2</span>, -<span class="dv">3</span>, -<span class="dv">4</span>));
+}
+
+<span class="kw">fn</span> bot(w: &amp;<span class="kw">mut</span> Wavefront, a: V3, a1: V3, b: V3, b1: V3) {
+    w.add_vertex(a.x, <span class="dv">0.0</span>, a.z);
+    w.add_vertex(a1.x, <span class="dv">0.0</span>, a1.z);
+    w.add_vertex(b1.x, <span class="dv">0.0</span>, b1.z);
+    w.add_vertex(b.x, <span class="dv">0.0</span>, b.z);
+    w.add_face(<span class="ot">vec!</span>(-<span class="dv">1</span>, -<span class="dv">2</span>, -<span class="dv">3</span>, -<span class="dv">4</span>));
+}
+
+<span class="kw">fn</span> side(w: &amp;<span class="kw">mut</span> Wavefront, a: V3, b: V3) {
+    w.add_vertex(a.x, <span class="dv">0.0</span>, a.z);
+    w.add_vertex(a.x, a.y, a.z);
+    w.add_vertex(b.x, b.y, b.z);
+    w.add_vertex(b.x, <span class="dv">0.0</span>, b.z);
+    w.add_face(<span class="ot">vec!</span>(-<span class="dv">1</span>, -<span class="dv">2</span>, -<span class="dv">3</span>, -<span class="dv">4</span>));
+}</code></pre>
+<p>Nothing too confusing, I hope. For the top and bottom of the model we create a quadrilateral which would be points A, A’, B’ and B in the pictures above or B, B’‘, C and C’. We’re working in 3d though so we have to do the sides as well. In this case we only need two points - A and A’ or B and B’ etc. Notice how the y value is either zero or the vector’s y value - this is so that the side goes face goes from the bottom all the way up to the top. Hopefully I’ve explained all this vector stuff well enough!</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> to_wavefront(thickness: <span class="kw">f64</span>, ways: Vec&lt;Vec&lt;V3&gt;&gt;) -&gt; Wavefront {
+    <span class="kw">let</span> <span class="kw">mut</span> w = Wavefront::new();
+    <span class="kw">for</span> coords in ways.iter() {
+        <span class="kw">let</span> <span class="kw">mut</span> iter = coords.iter().zip(coords.iter().skip(<span class="dv">1</span>))
+                                    .zip(coords.iter().skip(<span class="dv">2</span>));
+        <span class="kw">for</span> ((&amp;a, &amp;b), &amp;c) in iter {
+            join_up(&amp;<span class="kw">mut</span> w, a, b, thickness);
+            join_up(&amp;<span class="kw">mut</span> w, b, c, thickness);
+        }
+
+        <span class="kw">let</span> &amp;a = coords.iter().nth(coords.len() - <span class="dv">2</span>).unwrap();
+        <span class="kw">let</span> &amp;b = coords.iter().last().unwrap();
+        join_up(&amp;<span class="kw">mut</span> w, a, b, thickness);
+    }
+    w
+}</code></pre>
+<p>We create an iterate through the sections of track (<code>ways</code>). If you think back to the earlier diagrams, we want to get three points at a time and to do this we use the <code>zip</code> function on an iterator. <code>zip</code> takes an iterator and creates a new iterator which will return pairs of values from the two iterators it acts on - eg. it will return the first elements in a tuple togeher, then the second etc. We call <code>zip</code> on the iterator returned by <code>zip</code> because we need three points and that is why our iterator gives a tuple inside of a tuple. These three points are joined up as you would expect. The iterator returned by <code>zip</code> will stop generating values when one of its iterators run out which means we won’t get to join up the last two points together so that’ll have to be done out of the loop.</p>
+<p>Let’s tie it all together and get a working program!</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">fn</span> main() {
+    <span class="kw">let</span> args = os::args();
+    <span class="kw">let</span> <span class="kw">ref</span> osm_filename = args[<span class="dv">1</span>];
+    <span class="kw">let</span> <span class="kw">ref</span> track_name = args[<span class="dv">2</span>];
+    <span class="kw">let</span> <span class="kw">ref</span> out_filename = args[<span class="dv">3</span>];
+    <span class="kw">let</span> path = &amp;Path::new(osm_filename.clone());
+    <span class="ot">println!</span>(<span class="st">&quot;Reading osm file&quot;</span>);
+    <span class="kw">let</span> osm = Osm::new(path).unwrap();
+    <span class="kw">let</span> relation = osm.elements.values().filter(|e| {
+        <span class="kw">match</span> **e {
+            Relation{tags: <span class="kw">ref</span> ts, ..} =&gt; {
+                ts.find(&amp;<span class="st">&quot;name&quot;</span>.to_string()) == <span class="kw">Some</span>(track_name)
+            }
+            _ =&gt; <span class="kw">false</span>
+        }
+    }).next().expect(<span class="ot">format!</span>(<span class="st">&quot;Could not find relation with name {}&quot;</span>, track_name).as_slice());
+    <span class="ot">println!</span>(<span class="st">&quot;Finding nodes of the track&quot;</span>);
+    <span class="kw">let</span> latlngs = expand_relation(relation, &amp;osm.elements);
+    <span class="ot">println!</span>(<span class="st">&quot;Converting to model&quot;</span>);
+    <span class="kw">let</span> (coords, scale) = latlngs_to_coords(latlngs, <span class="dv">200</span>);
+    <span class="kw">let</span> obj = to_wavefront(<span class="dv">14.0</span> * scale, coords);
+    <span class="ot">println!</span>(<span class="st">&quot;Saving&quot;</span>);
+    <span class="kw">let</span> <span class="kw">mut</span> f = File::open_mode(&amp;Path::new(out_filename.clone()), Open, Write);
+    f.write_str(obj.to_string().as_slice()).unwrap();
+}</code></pre>
+<p>The <code>main</code> function shouldn’t be too much of a surprise. It gets the required information from the arguments of the program (rather unsafely) but other than that it is the same code as the end of the last post up until we convert to coordinates. I chose 200 as the size pretty much at random, feel free to try other sizes. The first argument to <code>to_wavefront</code> is the thickness of the road. I’ve passed in 14m which is about the width of an F1 track. Then we just save it to a file.</p>
+<p>Run like so:</p>
+<pre><code>$ cargo build
+$ ./target/osmmodels spa.osm &quot;Ciruit de Spa Francorchamps&quot; spa.obj</code></pre>
+<p>spa.osm is available <a href="https://github.com/mattyhall/osmmodels/blob/master/spa.osm">here</a>, copyright Open Street Map contributors.</p>
+<h2 id="finally-the-good-bit">Finally, the good bit</h2>
+<p>As you can see to showcase this I’ve chosen Spa-Francorchamps. Spa is a fantastic track, has produced some of the best overtakes (<a href="https://www.youtube.com/watch?v=5Xq4JyrsV4I#t=20">Mark Webber on Alonso in 2011 at ~170mph</a>) and usually produces fantastic racing. It also has a lot of elevation change as you can see:</p>
+<img width="75%" height="75%" src="../images/track_models/spa_irl.jpg" />
+<div class="info">
+<a href="http://en.wikipedia.org/wiki/File:Spa_francorchamps.jpg">Auguste Linotte Included under Creative Attribution-Share Alike 3.0 Unported licence</a>
+</div>
+<p>So let’s see what our program makes of it. I’ve rendered this with blender:</p>
+<p><img width="75%" height="75%" src="../images/track_models/render1.png" /></p>
+<p>I’m pretty chuffed with the result! You can really see the track rising out of La Source up to Raidillon and then the Kemmel straight. After Rivage (the tall hairpin at the top of the image) it drops down all the way to Stavelot and rises back up to the bus stop chicane.</p>
+<p>Most people reading this are probably not that impressed but to me this is awesome. Feel free to try it on different tracks, although very few tracks have the elevation changes that Spa does. I reckon this could be used to create a model for GPS tracks create when cycling, for example. I could then finally prove just how steep that hill was!</p>
+<p>The code is available <a href="https://github.com/mattyhall/osmmodels">here</a>.</p>
+
+            </div>
+            <footer id="footer" class="row">
+                Site proudly generated by
+                <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+            </footer>
+        </div>
+    </body>
+</html>
