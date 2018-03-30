@@ -1,0 +1,173 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        
+       	  <title>Matthew Hall</title>
+        
+        <link rel="stylesheet" href="/static/style.css">
+        <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+        <script src="https://use.fontawesome.com/b81c905ed1.js"></script>
+    </head>
+    <body>
+        <div class="container">
+          <div class="navbar">
+    <img src="/static/pics/profile.png" width="150">
+    <div class="navbar-text">
+        <h1>Matthew Hall</h1>
+        <ul class="nav">
+            <li><a href="/">Home</a></li>
+            <li><a href="/projects.html">Projects</a></li>
+            <li><a href="/blog.html">Blog</a></li>
+        </ul>
+    </div>
+</div>
+<div class="rule"></div>
+
+          
+            <div class="content">
+    <div class="project">
+        <h1>Timmy</h1>
+        <img src="/static/pics/projects/timmy.png" width="100%">
+        <p>
+            Timmy is a timesheets application I wrote to allow me to track how long I was spending on projects.
+            It was important that I could access it any where as I worked on multiple different devices in
+            different locations, so I decided to write it as a web app. I had some previous experience with React
+            but chose Ember for this project, with a REST backend written in Rust using Rocket (the web
+            framework) and Diesel (the ORM).
+        </p>
+
+        <p>
+            Its features include:
+            <ul>
+                <li>Creating projects</li>
+                <li>Timing "activities" using a stopwatch</li>
+                <li>Adding previous activities using human dates (eg. "two hours ago")</li>
+                <li>
+                    Visualising the information, such as hours spent on each day of the week or each hour
+                    of the day, most common tags and a gantt chart (done using Chart.js)
+                </li>
+                <li>User authentication</li>
+                <li>Responsive design</li>
+            </ul>
+        </p>
+
+        <p>
+            The code is available <a href="https://github.com/mattyhall/timmy-rocket">on Github</a>
+        </p>
+
+        <p>
+            <b>Technologies used:</b>
+            <a href="https://www.emberjs.com">Ember</a>,
+            <a href="https://www.rust-lang.org">Rust</a>,
+            <a href="https://rocket.rs">Rocket</a>,
+            <a href="https://diesel.rs">Diesel</a>,
+            <a href="http://www.chartjs.org">Chart.js</a>,
+            Javascript,
+            CSS,
+            Flexbox
+        </p>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="project">
+        <h1>Grubhub</h1>
+        <img src="/static/pics/projects/grubhub.png" width="100%">
+        <p>
+            Grubhub is a food sharing website created by me, and four others as part of the Group Project module
+            at Durham University. There were a number of requirements, such as user authentication, food search,
+            displaying the food's location on a map, chat, and a responsive design. We met all these requirements
+            and also suggested extra features which we then implemented. Before we started work we had to produce
+            a project plan including a list of system requirements, a timetable, domain research and implementation
+            details.
+        </p>
+        <p>
+            I mainly worked on the backend, which was written using CakePHP with a MySQL database, although we all
+            did swap roles as the deadline drew closer and the more advance features needed to be implemented.
+        </p>
+        <p>
+            The code is available <a href="https://gitlab.com/durhamcep/grubhub">on Gitlab</a>
+        </p>
+        <p>
+            <b>Technologies used:</b>
+            <a href="https://cakephp.org/">CakePHP</a>,
+            <a href="https://www.mysql.com/">MySQL</a>
+        </p>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="project">
+        <h1>rs-tiled</h1>
+        <img src="/static/pics/projects/rstiled.png" width="100%">
+        <p>
+            rs-tiled is a Rust crate that reads in maps created using the
+            <a href="http://www.mapeditor.org/">Tiled Map Editor</a>. It can then be used in games (such as the
+            one above). I continute to maintain this crate and accept contributions from other developers.
+        </p>
+
+        <p>
+            It is available <a href="https://github.com/mattyhall/rs-tiled">on Github</a>
+        </p>
+
+        <p>
+            <b>Technologies used:</b> Rust
+        </p>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="project">
+        <h1>Imageception</h1>
+        <img src="/static/pics/projects/imageception.jpg" width="100%">
+        <p>
+            Imageception was created during <a href="https://yrs.io/">Young Rewired State</a> 2012 - a hack week
+            using open datafor coders under the age of eighteen. The idea behind Imageception was to create
+            images out of other images - to create a sort of mosaic effect that can be zoomed in on to reveal
+            smaller pictures.
+        </p>
+        <p>
+            I needed a large bank of pictures so I created a script that took a tag, searched Flickr for it and
+            then downloaded all the Creative Commons pictures with that tag. Another Python script then took a
+            source image, went through each pixel and found the image that had the most similar average colour
+            and used that as the new "pixel".
+        </p>
+        <p>
+            I then created a small website using Flask that allowed you to upload your own image, choose a set of
+            smaller images and then generate a picture. It also allowed you to click on one of the smaller images
+            to apply the same process to that image, hence Imageception.
+        </p>
+
+        <p>
+            The code is available <a href="https://github.com/mattyhall/Imageception">on Github</a>
+        </p>
+        <p>
+            <b>Technologies used:</b>
+            Python,
+            <a href="http://flask.pocoo.org/">Flask</a>,
+            <a href="http://www.pythonware.com/products/pil/">Python Image Library</a>,
+            <a href="https://www.flickr.com/services/api/">The Flickr API</a>
+        </p>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="project">
+        <h1>StartJapanese!</h1>
+        <p>
+            In secondary school I studied Japanese for a short time. I decided to make an app for Android to
+            aid me learn Hiragana and Katakana. StartJapanese is a basic flashcards app with the two alphabets
+            included as flashcard decks. The app can randomise decks, test the cards you know least first and
+            offers question and revision modes. There is also the ability to add decks.
+        </p>
+        <p>
+            It is available <a href="https://play.google.com/store/apps/details?id=me.uk.quickbeam.startjapaneselite&hl=en">on the play store</a>. The app was designed in 2011 for small screens, so is a bit dated.
+        </p>
+        <p><b>Technologies used:</b> Java, Android, SQL</p>
+    </div>
+</div>
+
+          
+        </div>
+    </body>
+</html>
