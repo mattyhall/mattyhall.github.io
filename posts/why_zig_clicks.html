@@ -1,0 +1,276 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        
+          <title>Why Zig clicks</title>
+        
+        <link rel="stylesheet" href="/static/style.css">
+        <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+        <script src="https://use.fontawesome.com/b81c905ed1.js"></script>
+    </head>
+    <body>
+        <div class="container">
+          <div class="navbar">
+    <img src="/static/pics/profile.png" width="150">
+    <div class="navbar-text">
+        <h1>Matthew Hall</h1>
+        <ul class="nav">
+            <li><a href="/">Home</a></li>
+            <li><a href="/projects.html">Projects</a></li>
+            <li><a href="/blog.html">Blog</a></li>
+        </ul>
+    </div>
+</div>
+<div class="rule"></div>
+
+          
+            <div class="content">
+  <h1>Why Zig clicks</h1>
+
+  <p>I've spent a lot of time, probably too much, learning new programming languages. Usually this isn't really a bad thing - a new language can make you think about programming in a different way or teach you new techniques. The flip side of this is learning something new takes time and slows you down, so the things you actually want to make take a backseat. However, I've recently picked up a language called <a href="https://ziglang.org/">Zig</a> that has made me motivated to start and continue personal projects again.</p>
+<p>The uncharitable amongst you might say something along the lines of &quot;ok, but just after learning any language - whether it's Haskell, Rust, C#, or APL - aren't you enthused to make something with it?&quot;. And that's a fair point. I would be surprised, but certainly not astonished, if in two months I've abandoned by side projects and am back to playing Football Manager every evening instead. Hey, there's still a pandemic on and we all need a break! I do feel like Zig has some properties that makes it less likely than the others and the best way to sum them up is they just mean the language &quot;clicks&quot; for me. </p>
+<p>Clickiness is clearly a fuzzy and highly subjective concept, so I will try and give examples. Some of the points are light on code and heavy on feeling though, so if you are more interested in code feel free to skip forward or maybe instead read <a href="https://scattered-thoughts.net/writing/assorted-thoughts-on-zig-and-rust/">this excellent post</a> comparing Rust and Zig which shows off some cool things.</p>
+<p>Note that what clicks for me may put you off, and any comparisons I make to other languages are not to do them down at all, but as a counterpoint to Zig. </p>
+<h2>A small core</h2>
+<p>Zig's documentation is a bit unpolished at the moment. Understandably so given it's a pre-1.0 language and is in flux. However, that shouldn't necessarily put you off. I found that the language itself is actually pretty easy to learn for someone who has programmed before and a lot of that is to do with the language, by modern standards, being very small.</p>
+<p>In this sense Zig reminds me a little bit of Go. I'm not really a fan of Go but one thing the language and the community does very, very well is onboarding. Part of that is the language itself was designed <a href="https://golang.org/doc/faq#principles">to reduce complexity</a>. Another part of that is the documentation. I remember being very impressed going to <a href="https://golang.org">golang.org</a> and being taught the language in my browser and then feeling like I could go away and be productive almost immediately. Zig feels like it could be similar.</p>
+<p>The obvious question is what do we give up in order to make the language simple? The price we pay may not suprise you given Zig's positioning as a C replacement - there are no classes, inheritance or traits for example. However Zig has many of the things that I personally find have improved my code the most - either making it far clearer, safer or making writing it quicker:</p>
+<ul>
+<li>tagged unions</li>
+<li>optionals</li>
+<li>automatic deserialisation to structs</li>
+<li>type checked string formatting</li>
+</ul>
+<p>Here's an example with all four:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> Framework = </span><span style="color:#b48ead;">enum </span><span style="color:#c0c5ce;">{ Wpf, Django, };
+</span><span style="color:#b48ead;">const </span><span style="color:#d08770;">CV </span><span style="color:#c0c5ce;">= </span><span style="color:#96b5b4;">union</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">enum</span><span style="color:#c0c5ce;">) {
+</span><span style="color:#c0c5ce;">  software_engineer: </span><span style="color:#b48ead;">struct </span><span style="color:#c0c5ce;">{ 
+</span><span style="color:#c0c5ce;">      five_years_of_zig_experience: bool,
+</span><span style="color:#c0c5ce;">      </span><span style="color:#65737e;">// ?T is the syntax for an optional
+</span><span style="color:#c0c5ce;">      favourite_framework: ?Framework,
+</span><span style="color:#c0c5ce;">  },
+</span><span style="color:#c0c5ce;">  chef: struct { </span><span style="color:#bf616a;">has_michelin_star</span><span style="color:#c0c5ce;">: </span><span style="color:#b48ead;">bool </span><span style="color:#c0c5ce;">},
+</span><span style="color:#c0c5ce;">};
+</span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> Person = </span><span style="color:#b48ead;">struct </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  name: []const u8,
+</span><span style="color:#c0c5ce;">  cv: CV,
+</span><span style="color:#c0c5ce;">};
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">() !void {
+</span><span style="color:#c0c5ce;">  </span><span style="color:#65737e;">// &quot;\\&quot; is for multiline strings
+</span><span style="color:#c0c5ce;">  var stream = std.json.TokenStream.</span><span style="color:#96b5b4;">init</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">    \\{ 
+</span><span style="color:#c0c5ce;">    \\  &quot;</span><span style="color:#a3be8c;">name</span><span style="color:#c0c5ce;">&quot;: &quot;</span><span style="color:#a3be8c;">Raymond Day</span><span style="color:#c0c5ce;">&quot;, 
+</span><span style="color:#c0c5ce;">    \\  &quot;</span><span style="color:#a3be8c;">cv</span><span style="color:#c0c5ce;">&quot;: {
+</span><span style="color:#c0c5ce;">    \\    &quot;</span><span style="color:#a3be8c;">five_years_of_zig_experience</span><span style="color:#c0c5ce;">&quot;: </span><span style="color:#d08770;">false</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    \\    &quot;</span><span style="color:#a3be8c;">favourite_framework</span><span style="color:#c0c5ce;">&quot;: null
+</span><span style="color:#c0c5ce;">    \\  }
+</span><span style="color:#c0c5ce;">    \\}
+</span><span style="color:#c0c5ce;">  );
+</span><span style="color:#c0c5ce;">  </span><span style="color:#65737e;">// We need an allocator to parse the json into. Here we&#39;ll just use one backed by
+</span><span style="color:#c0c5ce;">  </span><span style="color:#65737e;">// a static buffer
+</span><span style="color:#c0c5ce;">  var buf: [</span><span style="color:#d08770;">1024</span><span style="color:#c0c5ce;">]</span><span style="color:#b48ead;">u8 </span><span style="color:#c0c5ce;">= undefined;
+</span><span style="color:#c0c5ce;">  var fba = std.heap.FixedBufferAllocator.</span><span style="color:#96b5b4;">init</span><span style="color:#c0c5ce;">(&amp;buf);
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> x = try std.json.</span><span style="color:#96b5b4;">parse</span><span style="color:#c0c5ce;">(Person, &amp;stream, .{.allocator = &amp;fba.allocator});
+</span><span style="color:#c0c5ce;">  </span><span style="color:#65737e;">// If we missed a case the Zig compiler would error
+</span><span style="color:#c0c5ce;">  switch (x.cv) {
+</span><span style="color:#c0c5ce;">    .software_engineer =&gt; |</span><span style="color:#bf616a;">se</span><span style="color:#c0c5ce;">| {
+</span><span style="color:#c0c5ce;">      std.log.</span><span style="color:#96b5b4;">debug</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">        &quot;</span><span style="color:#a3be8c;">5+ years of zig: {}, favourite framework: {}</span><span style="color:#c0c5ce;">&quot;, 
+</span><span style="color:#c0c5ce;">        .{se.five_years_of_zig_experience, se.favourite_framework});
+</span><span style="color:#c0c5ce;">    },
+</span><span style="color:#c0c5ce;">    .chef =&gt; |</span><span style="color:#bf616a;">c</span><span style="color:#c0c5ce;">| std.log.</span><span style="color:#96b5b4;">debug</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">michelin star: {}</span><span style="color:#c0c5ce;">&quot;, .{c.has_michelin_star}),
+</span><span style="color:#c0c5ce;">  }
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#65737e;">// outputs &quot;5+ years of zig: true, favourite framework: null&quot;
+</span></pre>
+<p>Programming for me is a lot more enjoyable when you can get something going quickly. Small languages that are still expressive really help with that and Zig definitely ticks those two boxes.</p>
+<h2>Local reasoning</h2>
+<p>Related to the above is Zig feels easy to reason about. I've spent quite a lot of time writing C# and, to a lesser extent, C++. Quite often going back to C is a bit of a relief. I used to wonder why this was and I think part of it is that, generally, C is a lot easier to read and reason about on a local level. I've always felt that I could look at a function in C and have an idea of what it does by reading it from top to bottom. The intention, although sometimes not expressed succinctly, is easy to work out. There are obvious caveats to this - undefined behaviour, memory safety etc can throw things completely off track, and it's certainly possible to get tricksy with pointer arithmetic - but they are ones that Zig is looking at addressing.</p>
+<p>I hesitate to write this paragraph given code, like types, is <em>not</em> documentation but I think the Zig standard library is a good example of this. Due to the lack of Zig stdlib documentation I sometimes struggle to work out what function I need to use or how to use it, and my solution has been to read the standard library code itself to work it out. Now - once more for those at the back - code is <em>definitely not</em> documentation but I was pleasantly surprised at how easy it was to read. Even when more complicated techniques are used the intention was always clear, even if I was unfamilar with the exact semantics.</p>
+<h2>Generics</h2>
+<p>When using other languages I've often felt like generics were tacked on after the fact. In many cases it turns out they were. Even C#, which you may think of as a language that was meant to improve Java, didn't ship with generics. Perhaps it's something else but it's always made me feel like they weren't quite in sync with the rest of the language; a bit of a kludge. Patterns that were elegant and idiomatic in a language became a bit uglier with generics.</p>
+<p>Zig's generics feel different to me. Perhaps it's that comptime (Zig's compile time feature) is very pervasive in the language, to the point that you don't necessarily need to mark functions as available at compile time. Or perhaps it's that they're just something we use all the time - functions. Either way, I find it really compelling. Here's a quick example:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">LimitedSizeBuffer</span><span style="color:#c0c5ce;">(comptime </span><span style="color:#bf616a;">T</span><span style="color:#c0c5ce;">: type, comptime </span><span style="color:#bf616a;">N</span><span style="color:#c0c5ce;">: </span><span style="color:#b48ead;">usize</span><span style="color:#c0c5ce;">) </span><span style="color:#b48ead;">type </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return struct </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    buf: [N]T,
+</span><span style="color:#c0c5ce;">    used: usize,
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    const Self = @This();
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">init</span><span style="color:#c0c5ce;">() </span><span style="color:#b48ead;">Self </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">      </span><span style="color:#b48ead;">return</span><span style="color:#c0c5ce;"> .{ .used = </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">, .buf = undefined };
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">addOne</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">: *</span><span style="color:#b48ead;">Self</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">v</span><span style="color:#c0c5ce;">: T) !void {
+</span><span style="color:#c0c5ce;">      </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.used &gt;= N) </span><span style="color:#b48ead;">return</span><span style="color:#c0c5ce;"> error.NoSpace;
+</span><span style="color:#c0c5ce;">      </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.buf[</span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.used] = v;
+</span><span style="color:#c0c5ce;">      </span><span style="color:#bf616a;">self</span><span style="color:#c0c5ce;">.used += </span><span style="color:#d08770;">1</span><span style="color:#c0c5ce;">;
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">  };
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">() !void {
+</span><span style="color:#c0c5ce;">  var buf = LimitedSizeBuffer([]</span><span style="color:#b48ead;">const u8</span><span style="color:#c0c5ce;">, </span><span style="color:#d08770;">2</span><span style="color:#c0c5ce;">).</span><span style="color:#96b5b4;">init</span><span style="color:#c0c5ce;">();
+</span><span style="color:#c0c5ce;">  _ = try buf.addOne(&quot;</span><span style="color:#a3be8c;">benny</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">  _ = try buf.addOne(&quot;</span><span style="color:#a3be8c;">harvey</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">  _ = try buf.addOne(&quot;</span><span style="color:#a3be8c;">rip</span><span style="color:#c0c5ce;">&quot;); </span><span style="color:#65737e;">// error
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Here we define a generic fixed-size buffer called LimitedSizeBuffer. As you can see really this is a function which takes the buffer type and size, which must be known at compile time, and returns a struct. It feels very elegant and very, well, Zigy. Perhaps having a small language makes it a lot easier to make it feel coherent - although I think that does the creator of Zig a disservice.</p>
+<h2>C interop</h2>
+<p>I've spent some time looking into what it would take to integrate Rust into a C/C++ codebase and the results were not terribly encouraging. Rust, for good reason, requires your C API to be marked as <code>unsafe</code>, with the idea being you would write a safe API on top of it for consumers. Clearly this is the right choice in Rust but it can be laborious. I think this isn't helped by the fact that although you can generate bindings automatically using <a href="https://github.com/rust-lang/rust-bindgen">bindgen</a>, it's not clear to me whether that should always be used. Is bindgen meant to be something that gets you on your way which you then tidy up or do you run it whenever you change the C code, or even as a build step of your Rust code? The bindings generated can be very verbose and it is always in one file. If I had an image library with say a different directory for each file format and some shared data structures in another directory then it would be nice to be able to generate separate files for each. I could then use the data structures as a separate module in my own Rust code without needing to also depend on the file formats.</p>
+<p>The obvious retort is that the code should be modular, with a small API for each part that is used to communicate with it. This in general might be a good principle but isn't always the case in the real world, and sometimes for a good reason! Even in the ideal world there is another problem though, and that is Cargo. Although it has been hugely successive in spawning a rich ecosystem of crates, focussing on Cargo as the almost only way to build Rust projects means it's pretty difficult to integrate Rust into an existing build system. It's not only me that has found this, it was mentioned by <a href="https://gist.github.com/rylev/0e3c3895dcb40b6a1c1cf8c427c01b5e">large companies</a> in 2019 and I'm not sure how far thing have improved. In the linked document Google say they let Cargo build some stuff in Fuchsia but it appears that is no longer the case - <a href="https://fuchsia.googlesource.com/fuchsia/+/master/tools/cargo-gnaw/README.md">they have a tool</a> which generates GN files from vendored Cargo-built crates.</p>
+<p>Zig is a lot happier binding to C. To give you a taste I googled for a small, high quality C library and found <a href="https://github.com/benhoyt/inih">this ini parser</a>.  They give the following example in C:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">stdio.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">stdlib.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">string.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">../ini.h</span><span style="color:#c0c5ce;">&quot;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">typedef struct
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">int</span><span style="color:#c0c5ce;"> version;
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">const char</span><span style="color:#c0c5ce;">* name;
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">const char</span><span style="color:#c0c5ce;">* email;
+</span><span style="color:#c0c5ce;">} configuration;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">static int </span><span style="color:#8fa1b3;">handler</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">user</span><span style="color:#c0c5ce;">, </span><span style="color:#b48ead;">const char</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">section</span><span style="color:#c0c5ce;">, </span><span style="color:#b48ead;">const char</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">name</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">                   </span><span style="color:#b48ead;">const char</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">value</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  configuration* pconfig = (configuration*)user;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">#define </span><span style="color:#8fa1b3;">MATCH</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">s</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">n</span><span style="color:#c0c5ce;">) </span><span style="color:#96b5b4;">strcmp</span><span style="color:#c0c5ce;">(section, s) == </span><span style="color:#d08770;">0 </span><span style="color:#c0c5ce;">&amp;&amp; </span><span style="color:#96b5b4;">strcmp</span><span style="color:#c0c5ce;">(name, n) == </span><span style="color:#d08770;">0
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">MATCH</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">protocol</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">version</span><span style="color:#c0c5ce;">&quot;)) {
+</span><span style="color:#c0c5ce;">      pconfig-&gt;version = </span><span style="color:#96b5b4;">atoi</span><span style="color:#c0c5ce;">(value);
+</span><span style="color:#c0c5ce;">  } </span><span style="color:#b48ead;">else if </span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">MATCH</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">user</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">name</span><span style="color:#c0c5ce;">&quot;)) {
+</span><span style="color:#c0c5ce;">      pconfig-&gt;name = </span><span style="color:#8fa1b3;">strdup</span><span style="color:#c0c5ce;">(value);
+</span><span style="color:#c0c5ce;">  } </span><span style="color:#b48ead;">else if </span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">MATCH</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">user</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">email</span><span style="color:#c0c5ce;">&quot;)) {
+</span><span style="color:#c0c5ce;">      pconfig-&gt;email = </span><span style="color:#8fa1b3;">strdup</span><span style="color:#c0c5ce;">(value);
+</span><span style="color:#c0c5ce;">  } </span><span style="color:#b48ead;">else </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">      </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">;  </span><span style="color:#65737e;">/* unknown section/name, error */
+</span><span style="color:#c0c5ce;">  }
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">1</span><span style="color:#c0c5ce;">;
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">int </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">argc</span><span style="color:#c0c5ce;">, </span><span style="color:#b48ead;">char</span><span style="color:#c0c5ce;">* </span><span style="color:#bf616a;">argv</span><span style="color:#c0c5ce;">[])
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  configuration config;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">ini_parse</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">test.ini</span><span style="color:#c0c5ce;">&quot;, handler, &amp;config) &lt; </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">) {
+</span><span style="color:#c0c5ce;">      </span><span style="color:#96b5b4;">printf</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Can&#39;t load &#39;test.ini&#39;</span><span style="color:#96b5b4;">\n</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">      </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">1</span><span style="color:#c0c5ce;">;
+</span><span style="color:#c0c5ce;">  }
+</span><span style="color:#c0c5ce;">  </span><span style="color:#96b5b4;">printf</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Config loaded from &#39;test.ini&#39;: version=</span><span style="color:#d08770;">%d</span><span style="color:#a3be8c;">, name=</span><span style="color:#d08770;">%s</span><span style="color:#a3be8c;">, email=</span><span style="color:#d08770;">%s</span><span style="color:#96b5b4;">\n</span><span style="color:#c0c5ce;">&quot;,
+</span><span style="color:#c0c5ce;">      config.</span><span style="color:#bf616a;">version</span><span style="color:#c0c5ce;">, config.</span><span style="color:#bf616a;">name</span><span style="color:#c0c5ce;">, config.</span><span style="color:#bf616a;">email</span><span style="color:#c0c5ce;">);
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">;
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>and translated to Zig:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> c = @cImport(@cInclude(&quot;</span><span style="color:#a3be8c;">ini.h</span><span style="color:#c0c5ce;">&quot;));
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> Configuration = </span><span style="color:#b48ead;">struct </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  version: isize,
+</span><span style="color:#c0c5ce;">  name: ?[]const u8,
+</span><span style="color:#c0c5ce;">  email: ?[]const u8,
+</span><span style="color:#c0c5ce;">};
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">strdup</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">s</span><span style="color:#c0c5ce;">: []const </span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">) []</span><span style="color:#b48ead;">const u8 </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> new = std.heap.</span><span style="color:#b48ead;">c_allocator</span><span style="color:#c0c5ce;">.</span><span style="color:#96b5b4;">alloc</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, s.len) catch unreachable;
+</span><span style="color:#c0c5ce;">  std.mem.</span><span style="color:#96b5b4;">copy</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, new, s);
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return</span><span style="color:#c0c5ce;"> new;
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">handler</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">user</span><span style="color:#c0c5ce;">: ?*c_void, </span><span style="color:#bf616a;">section</span><span style="color:#c0c5ce;">: [*c]const </span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">name</span><span style="color:#c0c5ce;">: [*c]const </span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, 
+</span><span style="color:#c0c5ce;">           </span><span style="color:#bf616a;">value</span><span style="color:#c0c5ce;">: [*c]const </span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">) </span><span style="color:#96b5b4;">callconv</span><span style="color:#c0c5ce;">(.C) </span><span style="color:#b48ead;">c_int </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">  var conf = @ptrCast(*Configuration, @alignCast(@alignOf(*Configuration), user));
+</span><span style="color:#c0c5ce;">  var s = std.mem.</span><span style="color:#96b5b4;">span</span><span style="color:#c0c5ce;">(section);
+</span><span style="color:#c0c5ce;">  var n = std.mem.</span><span style="color:#96b5b4;">span</span><span style="color:#c0c5ce;">(name);
+</span><span style="color:#c0c5ce;">  var v = std.mem.</span><span style="color:#96b5b4;">span</span><span style="color:#c0c5ce;">(value);
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(std.mem.</span><span style="color:#96b5b4;">eql</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, &quot;</span><span style="color:#a3be8c;">protocol</span><span style="color:#c0c5ce;">&quot;, s)) {
+</span><span style="color:#c0c5ce;">      conf.version = std.fmt.parseInt(</span><span style="color:#b48ead;">isize</span><span style="color:#c0c5ce;">, v, </span><span style="color:#d08770;">10</span><span style="color:#c0c5ce;">) catch unreachable;
+</span><span style="color:#c0c5ce;">  } </span><span style="color:#b48ead;">else if </span><span style="color:#c0c5ce;">(std.mem.</span><span style="color:#96b5b4;">eql</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, &quot;</span><span style="color:#a3be8c;">user</span><span style="color:#c0c5ce;">&quot;, s)) {
+</span><span style="color:#c0c5ce;">      </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(std.mem.</span><span style="color:#96b5b4;">eql</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, &quot;</span><span style="color:#a3be8c;">name</span><span style="color:#c0c5ce;">&quot;, n)) {
+</span><span style="color:#c0c5ce;">          conf.name = </span><span style="color:#96b5b4;">strdup</span><span style="color:#c0c5ce;">(v);
+</span><span style="color:#c0c5ce;">      } </span><span style="color:#b48ead;">else if </span><span style="color:#c0c5ce;">(std.mem.</span><span style="color:#96b5b4;">eql</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, &quot;</span><span style="color:#a3be8c;">email</span><span style="color:#c0c5ce;">&quot;, n)) {
+</span><span style="color:#c0c5ce;">          conf.email = </span><span style="color:#96b5b4;">strdup</span><span style="color:#c0c5ce;">(v);
+</span><span style="color:#c0c5ce;">      }
+</span><span style="color:#c0c5ce;">  }
+</span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">;
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">() anyerror!void {
+</span><span style="color:#c0c5ce;">  var config: Configuration = undefined;
+</span><span style="color:#c0c5ce;">  _ = c.</span><span style="color:#96b5b4;">ini_parse</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">examples/test.ini</span><span style="color:#c0c5ce;">&quot;, handler, &amp;config);
+</span><span style="color:#c0c5ce;">  std.log.</span><span style="color:#96b5b4;">debug</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">ver={}, name={s}, email={s}</span><span style="color:#c0c5ce;">&quot;, .{ 
+</span><span style="color:#c0c5ce;">    config.version, config.name, config.email 
+</span><span style="color:#c0c5ce;">  });
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Importing a c library is as easy as <code>const c = @cImport(@cInclude(&quot;HEADER_NAME.h&quot;));</code> and you then have full access to the functions inside it - Zig parses the header and understands C's types. There's no need here to redeclare each function as you would in other languages' FFIs. As you can see, we have to mark C pointers explicity using <code>[*c]</code>. We can then use <code>std.mem.span</code> to get a normal slice from it. I think this strikes a nice balance between being clear something is a C pointer - with all the pitfalls that entails - and allowing you to assert that you know it's safe to just get a normal Zig type from it.</p>
+<p>Building it is easy. inih is setup to create a shared library using meson:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">$ meson build
+</span><span style="color:#c0c5ce;">$ ninja -C build
+</span><span style="color:#c0c5ce;">$ zig build-exe src/main.zig -I. -lc -Lbuild -linih
+</span><span style="color:#c0c5ce;">$ ./main
+</span><span style="color:#c0c5ce;">debug: ver=6, name=Bob Smith, email=bob@smith.com
+</span></pre>
+<p>But we can do one better and use Zig's own build system here. A download of Zig includes a C compiler, which means we can mix C and Zig freely in our projects! Check it out:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">build</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">b</span><span style="color:#c0c5ce;">: *std.build.Builder) void {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> target = b.standardTargetOptions(.{});
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> mode = b.standardReleaseOptions();
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> exe = b.addExecutable(&quot;</span><span style="color:#a3be8c;">inih</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">src/main.zig</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">    exe.addIncludeDir(&quot;</span><span style="color:#a3be8c;">.</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">    exe.addCSourceFile(&quot;</span><span style="color:#a3be8c;">ini.c</span><span style="color:#c0c5ce;">&quot;, &amp;.{});
+</span><span style="color:#c0c5ce;">    exe.linkLibC();
+</span><span style="color:#c0c5ce;">    exe.setTarget(target);
+</span><span style="color:#c0c5ce;">    exe.setBuildMode(mode);
+</span><span style="color:#c0c5ce;">    exe.</span><span style="color:#96b5b4;">install</span><span style="color:#c0c5ce;">();
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> run_cmd = exe.</span><span style="color:#96b5b4;">run</span><span style="color:#c0c5ce;">();
+</span><span style="color:#c0c5ce;">    run_cmd.step.dependOn(b.getInstallStep());
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(b.args) |args| {
+</span><span style="color:#c0c5ce;">        run_cmd.addArgs(args);
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> run_step = b.</span><span style="color:#96b5b4;">step</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">run</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">Run the app</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">    run_step.dependOn(&amp;run_cmd.step);
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>That's it! We use <code>addCSourceFile</code>, add an include directory and link libc and that's all. It's really refreshing to see a language that seems to want to support you in using it in big, possibly monolithic, C codebases right from the get go. Whether you want to integrate it into your current build system just like any other compiler or you're ready to fully commit and start using Zig as your build system too.</p>
+<h2>A note of caution</h2>
+<p>Of course Zig is still quite early on in its development and we need to be patient to see how things pan out. A few things which might throw up problems occur to me:</p>
+<h4>Does simplicity scale?</h4>
+<p>As I've mentioned, in my own project I find it quite rewarding when I can see how some code works easily from a read through, even if that code is a little verbose. I do wonder how that scales over bigger projects and a longer time period - will the simplicy make the overall program more difficult to understand? </p>
+<p>The early signs are good for me I think. There's also the Zig stdlib and its compiler (which is currently being rewritten in Zig), although both were written by the language's creator so may be considered cheating.</p>
+<h4>RAII is good, actually</h4>
+<p>Zig has the <code>defer</code> keyword that allows you to run any code at the end of a scope. This is commonly used to free objects, eg:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">var slice = allocator.</span><span style="color:#96b5b4;">alloc</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, </span><span style="color:#d08770;">14</span><span style="color:#c0c5ce;">);
+</span><span style="color:#c0c5ce;">defer allocator.</span><span style="color:#96b5b4;">free</span><span style="color:#c0c5ce;">(slice);
+</span><span style="color:#c0c5ce;">std.mem.</span><span style="color:#96b5b4;">copy</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, slice, &quot;</span><span style="color:#a3be8c;">adventure call</span><span style="color:#c0c5ce;">&quot;);
+</span></pre>
+<p>I think this is mostly okay. Remembering to use defer became muscle memory after a bit. But I do think I'd miss RAII when it comes to reference counted pointers. Having to manually call <code>rc.inc()</code> and then matching with a <code>defer rc.dec()</code> seems quite error-prone.</p>
+<h2>Overall</h2>
+<p>Overall I've really been enjoying Zig and think it's got a bright future. People seem to be doing interesting stuff with it, including <a href="https://github.com/ifreund/river">a Wayland tiling window manager</a>, <a href="https://dev.to/kristoff/zig-makes-go-cross-compilation-just-work-29ho">cross compiling go projects</a> and even <a href="https://www.youtube.com/watch?v=124wdTckHNY">using it in production</a>.</p>
+
+</div>
+
+          
+        </div>
+    </body>
+</html>
