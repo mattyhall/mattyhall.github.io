@@ -43,7 +43,7 @@
 </ul>
 <p>Here's an example with all four:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+<code><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> Framework = </span><span style="color:#b48ead;">enum </span><span style="color:#c0c5ce;">{ Wpf, Django, };
 </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">CV </span><span style="color:#c0c5ce;">= </span><span style="color:#96b5b4;">union</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">enum</span><span style="color:#c0c5ce;">) {
@@ -86,7 +86,7 @@
 </span><span style="color:#c0c5ce;">  }
 </span><span style="color:#c0c5ce;">}
 </span><span style="color:#65737e;">// outputs &quot;5+ years of zig: true, favourite framework: null&quot;
-</span></pre>
+</span></code></pre>
 <p>Programming for me is a lot more enjoyable when you can get something going quickly. Small languages that are still expressive really help with that and Zig definitely ticks those two boxes.</p>
 <h2>Local reasoning</h2>
 <p>Related to the above is Zig feels easy to reason about. I've spent quite a lot of time writing C# and, to a lesser extent, C++. Quite often going back to C is a bit of a relief. I used to wonder why this was and I think part of it is that, generally, C is a lot easier to read and reason about on a local level. I've always felt that I could look at a function in C and have an idea of what it does by reading it from top to bottom. The intention, although sometimes not expressed succinctly, is easy to work out. There are obvious caveats to this - undefined behaviour, memory safety etc can throw things completely off track, and it's certainly possible to get tricksy with pointer arithmetic - but they are ones that Zig is looking at addressing.</p>
@@ -95,7 +95,7 @@
 <p>When using other languages I've often felt like generics were tacked on after the fact. In many cases it turns out they were. Even C#, which you may think of as a language that was meant to improve Java, didn't ship with generics. Perhaps it's something else but it's always made me feel like they weren't quite in sync with the rest of the language; a bit of a kludge. Patterns that were elegant and idiomatic in a language became a bit uglier with generics.</p>
 <p>Zig's generics feel different to me. Perhaps it's that comptime (Zig's compile time feature) is very pervasive in the language, to the point that you don't necessarily need to mark functions as available at compile time. Or perhaps it's that they're just something we use all the time - functions. Either way, I find it really compelling. Here's a quick example:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+<code><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">LimitedSizeBuffer</span><span style="color:#c0c5ce;">(comptime </span><span style="color:#bf616a;">T</span><span style="color:#c0c5ce;">: type, comptime </span><span style="color:#bf616a;">N</span><span style="color:#c0c5ce;">: </span><span style="color:#b48ead;">usize</span><span style="color:#c0c5ce;">) </span><span style="color:#b48ead;">type </span><span style="color:#c0c5ce;">{
 </span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return struct </span><span style="color:#c0c5ce;">{
@@ -122,14 +122,14 @@
 </span><span style="color:#c0c5ce;">  _ = try buf.addOne(&quot;</span><span style="color:#a3be8c;">harvey</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#c0c5ce;">  _ = try buf.addOne(&quot;</span><span style="color:#a3be8c;">rip</span><span style="color:#c0c5ce;">&quot;); </span><span style="color:#65737e;">// error
 </span><span style="color:#c0c5ce;">}
-</span></pre>
+</span></code></pre>
 <p>Here we define a generic fixed-size buffer called LimitedSizeBuffer. As you can see really this is a function which takes the buffer type and size, which must be known at compile time, and returns a struct. It feels very elegant and very, well, Zigy. Perhaps having a small language makes it a lot easier to make it feel coherent - although I think that does the creator of Zig a disservice.</p>
 <h2>C interop</h2>
 <p>I've spent some time looking into what it would take to integrate Rust into a C/C++ codebase and the results were not terribly encouraging. Rust, for good reason, requires your C API to be marked as <code>unsafe</code>, with the idea being you would write a safe API on top of it for consumers. Clearly this is the right choice in Rust but it can be laborious. I think this isn't helped by the fact that although you can generate bindings automatically using <a href="https://github.com/rust-lang/rust-bindgen">bindgen</a>, it's not clear to me whether that should always be used. Is bindgen meant to be something that gets you on your way which you then tidy up or do you run it whenever you change the C code, or even as a build step of your Rust code? The bindings generated can be very verbose and it is always in one file. If I had an image library with say a different directory for each file format and some shared data structures in another directory then it would be nice to be able to generate separate files for each. I could then use the data structures as a separate module in my own Rust code without needing to also depend on the file formats.</p>
 <p>The obvious retort is that the code should be modular, with a small API for each part that is used to communicate with it. This in general might be a good principle but isn't always the case in the real world, and sometimes for a good reason! Even in the ideal world there is another problem though, and that is Cargo. Although it has been hugely successive in spawning a rich ecosystem of crates, focussing on Cargo as the almost only way to build Rust projects means it's pretty difficult to integrate Rust into an existing build system. It's not only me that has found this, it was mentioned by <a href="https://gist.github.com/rylev/0e3c3895dcb40b6a1c1cf8c427c01b5e">large companies</a> in 2019 and I'm not sure how far thing have improved. In the linked document Google say they let Cargo build some stuff in Fuchsia but it appears that is no longer the case - <a href="https://fuchsia.googlesource.com/fuchsia/+/master/tools/cargo-gnaw/README.md">they have a tool</a> which generates GN files from vendored Cargo-built crates.</p>
 <p>Zig is a lot happier binding to C. To give you a taste I googled for a small, high quality C library and found <a href="https://github.com/benhoyt/inih">this ini parser</a>.  They give the following example in C:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">stdio.h</span><span style="color:#c0c5ce;">&gt;
+<code><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">stdio.h</span><span style="color:#c0c5ce;">&gt;
 </span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">stdlib.h</span><span style="color:#c0c5ce;">&gt;
 </span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">string.h</span><span style="color:#c0c5ce;">&gt;
 </span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">../ini.h</span><span style="color:#c0c5ce;">&quot;
@@ -171,10 +171,10 @@
 </span><span style="color:#c0c5ce;">      config.</span><span style="color:#bf616a;">version</span><span style="color:#c0c5ce;">, config.</span><span style="color:#bf616a;">name</span><span style="color:#c0c5ce;">, config.</span><span style="color:#bf616a;">email</span><span style="color:#c0c5ce;">);
 </span><span style="color:#c0c5ce;">  </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">;
 </span><span style="color:#c0c5ce;">}
-</span></pre>
+</span></code></pre>
 <p>and translated to Zig:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+<code><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> c = @cImport(@cInclude(&quot;</span><span style="color:#a3be8c;">ini.h</span><span style="color:#c0c5ce;">&quot;));
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> Configuration = </span><span style="color:#b48ead;">struct </span><span style="color:#c0c5ce;">{
@@ -214,19 +214,19 @@
 </span><span style="color:#c0c5ce;">    config.version, config.name, config.email 
 </span><span style="color:#c0c5ce;">  });
 </span><span style="color:#c0c5ce;">}
-</span></pre>
+</span></code></pre>
 <p>Importing a c library is as easy as <code>const c = @cImport(@cInclude(&quot;HEADER_NAME.h&quot;));</code> and you then have full access to the functions inside it - Zig parses the header and understands C's types. There's no need here to redeclare each function as you would in other languages' FFIs. As you can see, we have to mark C pointers explicity using <code>[*c]</code>. We can then use <code>std.mem.span</code> to get a normal slice from it. I think this strikes a nice balance between being clear something is a C pointer - with all the pitfalls that entails - and allowing you to assert that you know it's safe to just get a normal Zig type from it.</p>
 <p>Building it is easy. inih is setup to create a shared library using meson:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#c0c5ce;">$ meson build
+<code><span style="color:#c0c5ce;">$ meson build
 </span><span style="color:#c0c5ce;">$ ninja -C build
 </span><span style="color:#c0c5ce;">$ zig build-exe src/main.zig -I. -lc -Lbuild -linih
 </span><span style="color:#c0c5ce;">$ ./main
 </span><span style="color:#c0c5ce;">debug: ver=6, name=Bob Smith, email=bob@smith.com
-</span></pre>
+</span></code></pre>
 <p>But we can do one better and use Zig's own build system here. A download of Zig includes a C compiler, which means we can mix C and Zig freely in our projects! Check it out:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
+<code><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> std = @</span><span style="color:#96b5b4;">import</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">std</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">build</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">b</span><span style="color:#c0c5ce;">: *std.build.Builder) void {
 </span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> target = b.standardTargetOptions(.{});
@@ -250,7 +250,7 @@
 </span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">const</span><span style="color:#c0c5ce;"> run_step = b.</span><span style="color:#96b5b4;">step</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">run</span><span style="color:#c0c5ce;">&quot;, &quot;</span><span style="color:#a3be8c;">Run the app</span><span style="color:#c0c5ce;">&quot;);
 </span><span style="color:#c0c5ce;">    run_step.dependOn(&amp;run_cmd.step);
 </span><span style="color:#c0c5ce;">}
-</span></pre>
+</span></code></pre>
 <p>That's it! We use <code>addCSourceFile</code>, add an include directory and link libc and that's all. It's really refreshing to see a language that seems to want to support you in using it in big, possibly monolithic, C codebases right from the get go. Whether you want to integrate it into your current build system just like any other compiler or you're ready to fully commit and start using Zig as your build system too.</p>
 <h2>A note of caution</h2>
 <p>Of course Zig is still quite early on in its development and we need to be patient to see how things pan out. A few things which might throw up problems occur to me:</p>
@@ -260,10 +260,10 @@
 <h4>RAII is good, actually</h4>
 <p>Zig has the <code>defer</code> keyword that allows you to run any code at the end of a scope. This is commonly used to free objects, eg:</p>
 <pre style="background-color:#2b303b;">
-<span style="color:#c0c5ce;">var slice = allocator.</span><span style="color:#96b5b4;">alloc</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, </span><span style="color:#d08770;">14</span><span style="color:#c0c5ce;">);
+<code><span style="color:#c0c5ce;">var slice = allocator.</span><span style="color:#96b5b4;">alloc</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, </span><span style="color:#d08770;">14</span><span style="color:#c0c5ce;">);
 </span><span style="color:#c0c5ce;">defer allocator.</span><span style="color:#96b5b4;">free</span><span style="color:#c0c5ce;">(slice);
 </span><span style="color:#c0c5ce;">std.mem.</span><span style="color:#96b5b4;">copy</span><span style="color:#c0c5ce;">(</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">, slice, &quot;</span><span style="color:#a3be8c;">adventure call</span><span style="color:#c0c5ce;">&quot;);
-</span></pre>
+</span></code></pre>
 <p>I think this is mostly okay. Remembering to use defer became muscle memory after a bit. But I do think I'd miss RAII when it comes to reference counted pointers. Having to manually call <code>rc.inc()</code> and then matching with a <code>defer rc.dec()</code> seems quite error-prone.</p>
 <h2>Overall</h2>
 <p>Overall I've really been enjoying Zig and think it's got a bright future. People seem to be doing interesting stuff with it, including <a href="https://github.com/ifreund/river">a Wayland tiling window manager</a>, <a href="https://dev.to/kristoff/zig-makes-go-cross-compilation-just-work-29ho">cross compiling go projects</a> and even <a href="https://www.youtube.com/watch?v=124wdTckHNY">using it in production</a>.</p>
